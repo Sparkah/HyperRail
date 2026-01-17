@@ -14,8 +14,8 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "hyperrail",
-			"database_id": ""
+			"database_name": "hyper-rail-db",
+			"database_id": "536740c9-3ce8-4d24-8b35-7539f07e03e1"
 		}
 	]
 }
