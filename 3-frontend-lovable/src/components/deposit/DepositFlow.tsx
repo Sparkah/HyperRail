@@ -7,6 +7,7 @@ import { RouteConfirmation } from "./RouteConfirmation";
 import { ProgressTracker } from "./ProgressTracker";
 import { SuccessScreen } from "./SuccessScreen";
 import { DepositStep, RouteInfo, RouteStep, Chain, Token } from "@/types/deposit";
+import { useLifiWagmiFlow } from "./UseLifiFlow";
 
 const CHAIN_MAP: Record<string, number> = {
   ethereum: 1,
@@ -98,6 +99,8 @@ export function DepositFlow() {
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [progressSteps, setProgressSteps] = useState<RouteStep[]>([]);
 
+  const { sendLifiFlow } = useLifiWagmiFlow(null, amount); // Initialize the hook
+
   const sId = sourceChain ? CHAIN_MAP[sourceChain.id] : undefined;
   const tokenAddr = (sourceToken && sId) ? TOKEN_ADDRESSES[sourceToken.symbol]?.[sId] : undefined;
 
@@ -163,7 +166,7 @@ export function DepositFlow() {
 
   const handleConfirm = async () => {
     if (!isConnected) { openConnectModal?.(); return; }
-    
+
     if (!route?.transactionRequest) {
       setError("No transaction data available. Please try again.");
       return;
@@ -174,9 +177,12 @@ export function DepositFlow() {
       return;
     }
 
-    try {
+    await sendLifiFlow();
+
+    /*try {
       setError(null);
       // SIGN AND BROADCAST
+      debugger;
       const tx = await sendTransactionAsync({
         to: route.transactionRequest.to as `0x${string}`,
         data: route.transactionRequest.data as `0x${string}`,
@@ -189,7 +195,7 @@ export function DepositFlow() {
     } catch (err: any) {
       console.error("Signing failed:", err);
       setError(err.message || "User rejected transaction.");
-    }
+    }*/
   };
 
   return (
