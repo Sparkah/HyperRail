@@ -1,15 +1,35 @@
 import { useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
+import { useAccount } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { EntryScreen } from "./EntryScreen";
 import { RouteConfirmation } from "./RouteConfirmation";
 import { ProgressTracker } from "./ProgressTracker";
 import { SuccessScreen } from "./SuccessScreen";
 import { DepositStep, RouteInfo, RouteStep, Chain, Token } from "@/types/deposit";
 
-// Use your actual deployed Worker URL or localhost:8787 for local testing
+// LI.FI Chain ID Mapping
+const CHAIN_MAP: Record<string, number> = {
+  ethereum: 1,
+  arbitrum: 42161,
+  polygon: 137,
+  optimism: 10,
+  base: 8453,
+};
+
 const WORKER_URL = "http://localhost:8787";
 
+const defaultSteps: RouteStep[] = [
+  { id: "1", type: "swap", title: "Swap Assets", description: "Preparing funds", status: "pending" },
+  { id: "2", type: "bridge", title: "Cross-chain Bridge", description: "Transferring to destination", status: "pending" },
+  { id: "3", type: "confirm", title: "Arrival Confirmation", description: "Verifying arrival", status: "pending" },
+  { id: "4", type: "deposit", title: "Hyperliquid Deposit", description: "Finalizing", status: "pending" },
+];
+
 export function DepositFlow() {
+  const { isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
+
   const [step, setStep] = useState<DepositStep>("entry");
   const [amount, setAmount] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,49 +43,35 @@ export function DepositFlow() {
   const [route, setRoute] = useState<RouteInfo | null>(null);
   const [progressSteps, setProgressSteps] = useState<RouteStep[]>([]);
 
-  const CHAIN_MAP: Record<string, number> = {
-    "ethereum": 1,
-    "arbitrum": 42161,
-    "polygon": 137,
-    "optimism": 10,
-    "base": 8453,
-  };
-
   /**
    * Fetches real quote from LI.FI via Cloudflare Worker
    */
-  // Inside DepositFlow.tsx
-
   const handleContinue = async () => {
     if (!sourceChain || !destChain || !sourceToken || !destToken || !amount) return;
 
     setIsLoading(true);
     try {
-      // 1. Prepare raw amount (assuming 6 decimals for USDT/USDC)
+      // Prepare raw amount (6 decimals for USDC/USDT)
       const rawAmount = (parseFloat(amount) * 1_000_000).toString();
 
       const response = await fetch(`${WORKER_URL}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fromChain: CHAIN_MAP[sourceChain.id], // Use numeric IDs
+          fromChain: CHAIN_MAP[sourceChain.id],
           toChain: CHAIN_MAP[destChain.id],
           fromToken: sourceToken.symbol,
           toToken: destToken.symbol,
           fromAmount: rawAmount,
-          fromAddress: "0x975d106BA75Bcc52A72f20895cb475c4673E5c72"
-        })
+          fromAddress: "0x975d106BA75Bcc52A72f20895cb475c4673E5c72", // Placeholder for quote
+        }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to fetch quote");
 
-      // 2. Calculate the actual received amount in human units
       const receivedAmount = parseFloat(data.expectedOutput) / 1_000_000;
       const inputAmount = parseFloat(amount);
-
-      // 3. Calculate Total Fees as the difference (Input - Output)
-      // This ensures that if Input is $100 and Output is 99.19, fees will show $0.81
       const actualTotalFees = Math.max(0, inputAmount - receivedAmount);
 
       setRoute({
@@ -79,25 +85,42 @@ export function DepositFlow() {
         fees: {
           gas: `$${parseFloat(data.fees.gasUSD).toFixed(2)}`,
           bridge: `$${parseFloat(data.fees.bridgeUSD).toFixed(2)}`,
-          // Use the calculated difference for the "Total Fees" display
           total: `$${actualTotalFees.toFixed(2)}`,
         },
-        steps: data.steps || [],
+        steps: data.steps || defaultSteps,
       });
 
       setStep("preview");
     } catch (err) {
       console.error("Quote Fetch Error:", err);
-      alert("Unable to fetch a real-time quote.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  /**
+   * Triggers the Wallet Connection or proceeds to the bridge
+   */
   const handleConfirm = () => {
-    // Wallet connection logic will be triggered here in the next step
+    if (!isConnected) {
+      if (openConnectModal) {
+        openConnectModal();
+      }
+      return;
+    }
     setStep("progress");
   };
+
+  /**
+   * Logic: Once the wallet is connected while on the preview screen, 
+   * automatically proceed to the progress step.
+   */
+  useEffect(() => {
+    if (isConnected && step === "preview") {
+      setStep("progress");
+      setProgressSteps(defaultSteps.map((s, i) => ({ ...s, status: i === 0 ? "active" : "pending" })));
+    }
+  }, [isConnected, step]);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -129,14 +152,32 @@ export function DepositFlow() {
             />
           )}
 
-          {/* ... ProgressTracker and SuccessScreen remain unchanged ... */}
+          {step === "progress" && (
+            <ProgressTracker
+              key="progress"
+              steps={progressSteps}
+              onComplete={() => setStep("success")}
+            />
+          )}
+
+          {step === "success" && (
+            <SuccessScreen
+              key="success"
+              amount={route?.estimatedOutput || "0"}
+              onOpenHyperliquid={() => window.open("https://app.hyperliquid.xyz", "_blank")}
+              onDepositMore={() => {
+                setStep("entry");
+                setAmount("");
+              }}
+            />
+          )}
         </AnimatePresence>
 
         {isLoading && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
             <div className="glass-card p-8 flex flex-col items-center gap-4">
               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="font-bold text-lg">Fetching Best Route...</p>
+              <p className="font-bold text-lg">Calculating best route...</p>
             </div>
           </div>
         )}
