@@ -24,7 +24,7 @@ const TOKEN_ADDRESSES: Record<string, string> = {
 
 const WORKER_URL = import.meta.env.DEV 
   ? "http://localhost:8787" 
-  : "https://hyperrail-worker.timopro16.workers.dev/api/quote";
+  : "https://hyperrail-worker.timopro16.workers.dev";
 
 const defaultSteps: RouteStep[] = [
   { id: "1", type: "swap", title: "Swap Assets", description: "Preparing funds", status: "pending" },
