@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, Clock, Shield, Zap, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Clock, Shield, Zap, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RouteInfo } from "@/types/deposit";
 
@@ -7,6 +7,10 @@ interface RouteConfirmationProps {
   route: RouteInfo;
   onBack: () => void;
   onConfirm: () => void;
+  buttonText?: string;
+  buttonDisabled?: boolean;
+  buttonLoading?: boolean;
+  error?: string | null;
 }
 
 const stepIcons: Record<string, React.ReactNode> = {
@@ -16,7 +20,15 @@ const stepIcons: Record<string, React.ReactNode> = {
   deposit: <span className="text-sm">💵</span>,
 };
 
-export function RouteConfirmation({ route, onBack, onConfirm }: RouteConfirmationProps) {
+export function RouteConfirmation({
+  route,
+  onBack,
+  onConfirm,
+  buttonText = "Confirm Deposit",
+  buttonDisabled = false,
+  buttonLoading = false,
+  error,
+}: RouteConfirmationProps) {
   return (
     <motion.div
       initial={{ opacity: 0, x: 20 }}
@@ -46,7 +58,7 @@ export function RouteConfirmation({ route, onBack, onConfirm }: RouteConfirmatio
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm text-muted-foreground">Depositing</div>
-            <div className="text-2xl font-bold">${route.amount}</div>
+            <div className="text-2xl font-bold">{route.amount} {route.fromToken.symbol}</div>
           </div>
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
             <ArrowRight className="h-4 w-4 text-primary" />
@@ -145,6 +157,17 @@ export function RouteConfirmation({ route, onBack, onConfirm }: RouteConfirmatio
         <Check className="h-5 w-5 text-green-400" />
       </motion.div>
 
+      {/* Error message */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+        >
+          {error}
+        </motion.div>
+      )}
+
       {/* CTA */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -156,14 +179,18 @@ export function RouteConfirmation({ route, onBack, onConfirm }: RouteConfirmatio
           size="lg"
           className="w-full text-lg py-6"
           onClick={onConfirm}
+          disabled={buttonDisabled}
         >
-          Confirm Deposit
-          <ArrowRight className="h-5 w-5" />
+          {buttonLoading && <Loader2 className="h-5 w-5 animate-spin mr-2" />}
+          {buttonText}
+          {!buttonLoading && <ArrowRight className="h-5 w-5 ml-2" />}
         </Button>
       </motion.div>
 
       <p className="text-center text-xs text-muted-foreground/60">
-        Transaction is irreversible once confirmed
+        {buttonText.includes("Approve")
+          ? "You'll need to approve token spending before the swap"
+          : "Transaction is irreversible once confirmed"}
       </p>
     </motion.div>
   );
