@@ -5,6 +5,7 @@ import { RouteConfirmation } from "./RouteConfirmation";
 import { ProgressTracker } from "./ProgressTracker";
 import { SuccessScreen } from "./SuccessScreen";
 import { DepositStep, RouteInfo, RouteStep } from "@/types/deposit";
+import { getLifiQuote } from "@/lib/api";
 
 const defaultSteps: RouteStep[] = [
   {
@@ -68,10 +69,48 @@ export function DepositFlow() {
     };
   };
 
-  const handleContinue = () => {
-    const newRoute = calculateRoute(amount);
-    setRoute(newRoute);
-    setStep("preview");
+  // Inside DepositFlow.tsx
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleContinue = async () => {
+    setIsLoading(true);
+    try {
+      // 1. Convert human amount (e.g. 1.5 ETH) to base units (e.g. 1500000000000000000)
+      // For this example, we assume 18 decimals. Use a library like ethers for real decimals.
+      const rawAmount = (parseFloat(amount) * 10 ** 18).toString();
+
+      const data = await getLifiQuote({
+        fromChain: 137, // Polygon
+        fromToken: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", // USDC
+        fromAmount: rawAmount,
+        fromAddress: "0x975d106BA75Bcc52A72f20895cb475c4673E5c72", // Your Rabby Wallet
+      });
+
+      // 2. Map the Worker response back to your RouteInfo type
+      setRoute({
+        fromChain: { id: "polygon", name: "Polygon", icon: "🟣" },
+        fromToken: { symbol: "USDC", name: "USD Coin", icon: "💵" },
+        toChain: { id: "hyperliquid", name: "Hyperliquid", icon: "⚡" },
+        toToken: { symbol: "USDC", name: "USD Coin", icon: "💵" },
+        amount: amount,
+        estimatedOutput: data.expectedOutputUSD, // Using USD value for simplicity
+        estimatedTime: `~${Math.round(data.etaSeconds / 60)} min`,
+        fees: {
+          gas: `$${data.fees.gasUSD}`,
+          bridge: `$${data.fees.bridgeUSD}`,
+          total: `$${data.fees.totalUSD}`,
+        },
+        steps: data.steps, // These now come from LI.FI!
+      });
+
+      setStep("preview");
+    } catch (err) {
+      console.error("Quote error:", err);
+      alert("Could not get a real-time quote.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleConfirm = () => {
@@ -99,10 +138,10 @@ export function DepositFlow() {
             i < activeIndex
               ? "completed"
               : i === activeIndex
-              ? "completed"
-              : i === activeIndex + 1
-              ? "active"
-              : "pending",
+                ? "completed"
+                : i === activeIndex + 1
+                  ? "active"
+                  : "pending",
         }))
       );
     }, 2000);
