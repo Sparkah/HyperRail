@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowDown, Wallet } from "lucide-react";
+import { ArrowRight, ArrowDown, Wallet, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "./ChainSelector";
 import { TokenSelector } from "./TokenSelector";
@@ -9,15 +9,11 @@ import { Chain, Token } from "@/types/deposit";
 interface EntryScreenProps {
   selectedSourceChain: Chain | null;
   selectedSourceToken: Token | null;
-  selectedDestChain: Chain | null;
-  selectedDestToken: Token | null;
   amount: string;
   balance: string | null;
   error: string | null;
   onSourceChainSelect: (chain: Chain) => void;
   onSourceTokenSelect: (token: Token) => void;
-  onDestChainSelect: (chain: Chain) => void;
-  onDestTokenSelect: (token: Token) => void;
   onAmountChange: (amount: string) => void;
   onContinue: () => void;
 }
@@ -25,43 +21,25 @@ interface EntryScreenProps {
 export function EntryScreen({
   selectedSourceChain,
   selectedSourceToken,
-  selectedDestChain,
-  selectedDestToken,
   amount,
   balance,
   error,
   onSourceChainSelect,
   onSourceTokenSelect,
-  onDestChainSelect,
-  onDestTokenSelect,
   onAmountChange,
   onContinue,
 }: EntryScreenProps) {
-  // Prevent same-chain transfers to avoid LI.FI errors
-  const isSameChain = selectedSourceChain?.id === selectedDestChain?.id && selectedSourceChain !== null;
-  
-  const isValid = 
-    selectedSourceChain && 
-    selectedSourceToken && 
-    selectedDestChain && 
-    selectedDestToken && 
-    parseFloat(amount) > 0 && 
-    !isSameChain;
+  const isValid = selectedSourceChain && selectedSourceToken && parseFloat(amount) > 0 && selectedSourceChain.id !== "hyperevm";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-6"
-    >
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold">Bridge to <span className="gradient-text">HyperRail</span></h1>
-        <p className="text-muted-foreground">Select your route and amount.</p>
+        <p className="text-muted-foreground">Select your source route and amount.</p>
       </div>
 
       <div className="glass-card p-6 space-y-4">
-        {/* From Section */}
+        {/* FROM */}
         <div className="space-y-2">
           <div className="flex justify-between items-end">
             <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">From</label>
@@ -86,31 +64,24 @@ export function EntryScreen({
           </div>
         </div>
 
-        {/* To Section */}
+        {/* STATIC TO */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">To</label>
+          <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">To (HyperEVM)</label>
           <div className="grid grid-cols-2 gap-2">
-            <ChainSelector selected={selectedDestChain} onSelect={onDestChainSelect} />
-            <TokenSelector selected={selectedDestToken} onSelect={onDestTokenSelect} />
+            <div className="flex items-center gap-3 h-14 w-full bg-secondary/30 border border-border/50 rounded-xl px-4 cursor-not-allowed">
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="font-medium text-sm">HyperEVM</span>
+            </div>
+            <div className="flex items-center gap-3 h-14 w-full bg-secondary/30 border border-border/50 rounded-xl px-4 cursor-not-allowed">
+              <span className="text-xl">💵</span>
+              <span className="font-medium text-sm">USDC</span>
+            </div>
           </div>
         </div>
-
-        {isSameChain && (
-          <p className="text-destructive text-xs text-center font-medium bg-destructive/10 py-2 rounded-lg">
-            Source and destination chains must be different.
-          </p>
-        )}
       </div>
 
-      <Button
-        variant="glow"
-        size="lg"
-        className="w-full h-14 text-lg font-semibold"
-        disabled={!isValid}
-        onClick={onContinue}
-      >
-        Preview Route
-        <ArrowRight className="h-5 w-5 ml-2" />
+      <Button variant="glow" size="lg" className="w-full h-14 text-lg font-semibold" disabled={!isValid} onClick={onContinue}>
+        Preview Route <ArrowRight className="h-5 w-5 ml-2" />
       </Button>
     </motion.div>
   );
