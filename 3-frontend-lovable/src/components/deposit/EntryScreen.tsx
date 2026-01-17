@@ -1,20 +1,23 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowDown, Wallet, Zap } from "lucide-react";
+import { ArrowRight, ArrowDown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "./ChainSelector";
 import { TokenSelector } from "./TokenSelector";
 import { AmountInput } from "./AmountInput";
 import { Chain, Token } from "@/types/deposit";
 
-// Updated Interface: Removed destination selection props to fix TS error
 interface EntryScreenProps {
   selectedSourceChain: Chain | null;
   selectedSourceToken: Token | null;
+  selectedDestChain: Chain | null;
+  selectedDestToken: Token | null;
   amount: string;
   balance: string | null;
   error: string | null;
   onSourceChainSelect: (chain: Chain) => void;
   onSourceTokenSelect: (token: Token) => void;
+  onDestChainSelect: (chain: Chain) => void;
+  onDestTokenSelect: (token: Token) => void;
   onAmountChange: (amount: string) => void;
   onContinue: () => void;
 }
@@ -22,15 +25,28 @@ interface EntryScreenProps {
 export function EntryScreen({
   selectedSourceChain,
   selectedSourceToken,
+  selectedDestChain,
+  selectedDestToken,
   amount,
   balance,
   error,
   onSourceChainSelect,
   onSourceTokenSelect,
+  onDestChainSelect,
+  onDestTokenSelect,
   onAmountChange,
   onContinue,
 }: EntryScreenProps) {
-  const isValid = selectedSourceChain && selectedSourceToken && parseFloat(amount) > 0;
+  // Prevent same-chain transfers to avoid LI.FI errors
+  const isSameChain = selectedSourceChain?.id === selectedDestChain?.id && selectedSourceChain !== null;
+  
+  const isValid = 
+    selectedSourceChain && 
+    selectedSourceToken && 
+    selectedDestChain && 
+    selectedDestToken && 
+    parseFloat(amount) > 0 && 
+    !isSameChain;
 
   return (
     <motion.div
@@ -41,11 +57,11 @@ export function EntryScreen({
     >
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold">Bridge to <span className="gradient-text">HyperRail</span></h1>
-        <p className="text-muted-foreground">Select your source route and amount.</p>
+        <p className="text-muted-foreground">Select your route and amount.</p>
       </div>
 
       <div className="glass-card p-6 space-y-4">
-        {/* FROM SECTION (User Selection) */}
+        {/* From Section */}
         <div className="space-y-2">
           <div className="flex justify-between items-end">
             <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">From</label>
@@ -70,21 +86,20 @@ export function EntryScreen({
           </div>
         </div>
 
-        {/* TO SECTION (Locked to HyperEVM USDC) */}
+        {/* To Section */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">To (HyperEVM)</label>
+          <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">To</label>
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center gap-3 h-14 w-full bg-secondary/30 border border-border/50 rounded-xl px-4 cursor-not-allowed opacity-80">
-              <Zap className="h-5 w-5 text-primary" />
-              <span className="font-medium">HyperEVM</span>
-            </div>
-            <div className="flex items-center gap-3 h-14 w-full bg-secondary/30 border border-border/50 rounded-xl px-4 cursor-not-allowed opacity-80">
-              <span className="text-2xl">💵</span>
-              <span className="font-medium">USDC</span>
-            </div>
+            <ChainSelector selected={selectedDestChain} onSelect={onDestChainSelect} />
+            <TokenSelector selected={selectedDestToken} onSelect={onDestTokenSelect} />
           </div>
-          <p className="text-[10px] text-center text-muted-foreground">Destination is locked to USDC on HyperEVM Testnet.</p>
         </div>
+
+        {isSameChain && (
+          <p className="text-destructive text-xs text-center font-medium bg-destructive/10 py-2 rounded-lg">
+            Source and destination chains must be different.
+          </p>
+        )}
       </div>
 
       <Button
