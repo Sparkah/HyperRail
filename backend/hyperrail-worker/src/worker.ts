@@ -234,11 +234,11 @@ async function handleQuote(request: Request, env: Env): Promise<Response> {
 
 /** JSON response with CORS headers */
 function json(data: unknown, status = 200): Response {
-    return new Response(JSON.stringify(data, null, 2), {
-        status,
+    // In your worker helper
+    return new Response(JSON.stringify(data), {
         headers: {
-            "Content-Type": "application/json;charset=UTF-8",
-            "Access-Control-Allow-Origin": "*",
-        },
+            "Access-Control-Allow-Origin": "https://hyperrail.pages.dev", // Better than "*" for production
+            "Content-Type": "application/json"
+        }
     });
 }

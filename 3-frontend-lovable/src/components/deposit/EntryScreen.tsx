@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, ArrowDown } from "lucide-react";
+import { ArrowRight, ArrowDown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "./ChainSelector";
 import { TokenSelector } from "./TokenSelector";
@@ -12,6 +12,8 @@ interface EntryScreenProps {
   selectedDestChain: Chain | null;
   selectedDestToken: Token | null;
   amount: string;
+  balance: string | null;
+  error: string | null;
   onSourceChainSelect: (chain: Chain) => void;
   onSourceTokenSelect: (token: Token) => void;
   onDestChainSelect: (chain: Chain) => void;
@@ -26,6 +28,8 @@ export function EntryScreen({
   selectedDestChain,
   selectedDestToken,
   amount,
+  balance,
+  error,
   onSourceChainSelect,
   onSourceTokenSelect,
   onDestChainSelect,
@@ -33,9 +37,16 @@ export function EntryScreen({
   onAmountChange,
   onContinue,
 }: EntryScreenProps) {
-  // Prevent same-chain transfers
+  // Prevent same-chain transfers to avoid LI.FI errors
   const isSameChain = selectedSourceChain?.id === selectedDestChain?.id && selectedSourceChain !== null;
-  const isValid = selectedSourceChain && selectedSourceToken && selectedDestChain && selectedDestToken && parseFloat(amount) > 0 && !isSameChain;
+  
+  const isValid = 
+    selectedSourceChain && 
+    selectedSourceToken && 
+    selectedDestChain && 
+    selectedDestToken && 
+    parseFloat(amount) > 0 && 
+    !isSameChain;
 
   return (
     <motion.div
@@ -52,23 +63,32 @@ export function EntryScreen({
       <div className="glass-card p-6 space-y-4">
         {/* From Section */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground">From</label>
+          <div className="flex justify-between items-end">
+            <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">From</label>
+            {balance && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-md">
+                <Wallet className="h-3 w-3 text-primary" />
+                <span>Balance: <span className="text-foreground font-medium">{parseFloat(balance).toFixed(4)}</span></span>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <ChainSelector selected={selectedSourceChain} onSelect={onSourceChainSelect} />
             <TokenSelector selected={selectedSourceToken} onSelect={onSourceTokenSelect} />
           </div>
           <AmountInput value={amount} onChange={onAmountChange} token={selectedSourceToken} />
+          {error && <p className="text-destructive text-xs font-medium animate-shake">{error}</p>}
         </div>
 
         <div className="flex justify-center -my-2 relative z-10">
-          <div className="bg-background border border-border p-1.5 rounded-full">
+          <div className="bg-background border border-border p-1.5 rounded-full shadow-lg">
             <ArrowDown className="h-4 w-4 text-primary" />
           </div>
         </div>
 
         {/* To Section */}
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase text-muted-foreground">To</label>
+          <label className="text-xs font-bold uppercase text-muted-foreground tracking-wider">To</label>
           <div className="grid grid-cols-2 gap-2">
             <ChainSelector selected={selectedDestChain} onSelect={onDestChainSelect} />
             <TokenSelector selected={selectedDestToken} onSelect={onDestTokenSelect} />
@@ -76,19 +96,21 @@ export function EntryScreen({
         </div>
 
         {isSameChain && (
-          <p className="text-destructive text-xs text-center font-medium">Source and destination chains must be different.</p>
+          <p className="text-destructive text-xs text-center font-medium bg-destructive/10 py-2 rounded-lg">
+            Source and destination chains must be different.
+          </p>
         )}
       </div>
 
       <Button
         variant="glow"
         size="lg"
-        className="w-full"
+        className="w-full h-14 text-lg font-semibold"
         disabled={!isValid}
         onClick={onContinue}
       >
         Preview Route
-        <ArrowRight className="h-5 w-5 ml-2\" />
+        <ArrowRight className="h-5 w-5 ml-2" />
       </Button>
     </motion.div>
   );
