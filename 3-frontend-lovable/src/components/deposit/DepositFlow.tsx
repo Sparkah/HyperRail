@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { useAccount, useBalance } from "wagmi";
+import { useAccount, useBalance, useSendTransaction } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { EntryScreen } from "./EntryScreen";
 import { RouteConfirmation } from "./RouteConfirmation";
@@ -85,6 +85,7 @@ const defaultSteps: RouteStep[] = [
 export function DepositFlow() {
   const { isConnected, address } = useAccount();
   const { openConnectModal } = useConnectModal();
+  const { sendTransactionAsync } = useSendTransaction(); // Hook for signing
 
   const [step, setStep] = useState<DepositStep>("entry");
   const [amount, setAmount] = useState("");
@@ -98,8 +99,6 @@ export function DepositFlow() {
   const [progressSteps, setProgressSteps] = useState<RouteStep[]>([]);
 
   const sId = sourceChain ? CHAIN_MAP[sourceChain.id] : undefined;
-
-  // Safe balance fetching with fallback to avoid "reading properties of undefined"
   const tokenAddr = (sourceToken && sId) ? TOKEN_ADDRESSES[sourceToken.symbol]?.[sId] : undefined;
 
   const { data: balanceData } = useBalance({
@@ -114,20 +113,21 @@ export function DepositFlow() {
   const handleContinue = async () => {
     if (!sourceChain || !sourceToken || !amount) return;
     setIsLoading(true);
+    setError(null);
     try {
       const rawAmount = (parseFloat(amount) * 1_000_000).toString();
       const fromChainId = CHAIN_MAP[sourceChain.id];
-      debugger;
+
       const response = await fetch(`${WORKER_URL}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fromChain: fromChainId,
-          toChain: 999, // FORCED: HyperEVM Mainnet
+          toChain: 999,
           fromToken: TOKEN_ADDRESSES[sourceToken.symbol][fromChainId],
-          toToken: TOKEN_ADDRESSES["USDC"][999], // System USDC address
+          toToken: TOKEN_ADDRESSES["USDC"][999],
           fromAmount: rawAmount,
-          fromAddress: address || "0x975d106BA75Bcc52A72f20895cb475c4673E5c72", // Your connected address
+          fromAddress: address || "0x975d106BA75Bcc52A72f20895cb475c4673E5c72",
         }),
       });
 
@@ -148,28 +148,48 @@ export function DepositFlow() {
           bridge: `$${parseFloat(data.fees.bridgeUSD || "0").toFixed(2)}`,
           total: `$${(parseFloat(amount) - receivedAmount).toFixed(2)}`,
         },
+        transactionRequest: data.transactionRequest, // Captured for signing
         steps: data.steps || defaultSteps,
       });
 
       setStep("preview");
     } catch (err: any) {
       console.error(err);
-      setError("No valid route to HyperEVM found. Try a different source chain.");
+      setError("No valid route found. Try a different source chain.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!isConnected) { openConnectModal?.(); return; }
-    if (parseFloat(amount) > walletBalance) {
-      setError(`Insufficient balance. You have ${walletBalance.toFixed(4)} ${sourceToken?.symbol}.`);
-      setAmount("");
-      setStep("entry");
+    
+    if (!route?.transactionRequest) {
+      setError("No transaction data available. Please try again.");
       return;
     }
-    setProgressSteps(defaultSteps.map((s, i) => ({ ...s, status: i === 0 ? "active" : "pending" })));
-    setStep("progress");
+
+    if (parseFloat(amount) > walletBalance) {
+      setError(`Insufficient balance. You have ${walletBalance.toFixed(4)} ${sourceToken?.symbol}.`);
+      return;
+    }
+
+    try {
+      setError(null);
+      // SIGN AND BROADCAST
+      const tx = await sendTransactionAsync({
+        to: route.transactionRequest.to as `0x${string}`,
+        data: route.transactionRequest.data as `0x${string}`,
+        value: route.transactionRequest.value ? BigInt(route.transactionRequest.value) : 0n,
+      });
+
+      console.log("Transaction Hash:", tx);
+      setProgressSteps(defaultSteps.map((s, i) => ({ ...s, status: i === 0 ? "active" : "pending" })));
+      setStep("progress");
+    } catch (err: any) {
+      console.error("Signing failed:", err);
+      setError(err.message || "User rejected transaction.");
+    }
   };
 
   return (

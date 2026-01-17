@@ -13,6 +13,7 @@ export interface Token {
   balance?: string;
 }
 
+// types/deposit.ts
 export interface RouteInfo {
   fromChain: Chain;
   fromToken: Token;
@@ -26,7 +27,15 @@ export interface RouteInfo {
     bridge: string;
     total: string;
   };
-  steps: RouteStep[];
+  // Add this field
+  transactionRequest?: {
+    to: string;
+    data: string;
+    value: string;
+    from: string;
+    chainId: number;
+  };
+  steps: any[];
 }
 
 export interface RouteStep {
