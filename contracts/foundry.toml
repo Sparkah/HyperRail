@@ -4,6 +4,7 @@ out = "out"
 libs = ["lib"]
 test = "test"
 solc = "0.8.20"
+evm_version = "paris"  # Avoid PUSH0 opcode (EIP-3855) for HyperEVM compatibility
 
 # Ignore test files in dependencies
 ignore = ["lib/**/test/**", "lib/**/tests/**"]
