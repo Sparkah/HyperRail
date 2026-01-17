@@ -54,14 +54,16 @@ async function handleQuote(request: Request, env: Env): Promise<Response> {
     }
 
     const params = new URLSearchParams({
-        fromChain: fromChain.toString(),
-        toChain: toChain.toString(),
-        fromToken,
-        toToken,
-        fromAmount,
-        fromAddress,
+        fromChain: body.fromChain.toString(), // LI.FI expects "1", not "ethereum"
+        toChain: body.toChain.toString(),     // LI.FI expects "42161", not "arbitrum"
+        fromToken: body.fromToken,
+        toToken: body.toToken,
+        fromAmount: body.fromAmount,
+        fromAddress: body.fromAddress,
         integrator: env.LIFI_INTEGRATOR || "HyperRail",
     });
+
+    const lifiUrl = `https://li.quest/v1/quote?${params.toString()}`;
 
     try {
         const lifiRes = await fetch(`https://li.quest/v1/quote?${params.toString()}`);

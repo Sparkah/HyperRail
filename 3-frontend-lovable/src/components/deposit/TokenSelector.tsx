@@ -1,3 +1,4 @@
+// TokenSelector.tsx
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Token } from "@/types/deposit";
@@ -9,10 +10,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const tokens: Token[] = [
-  { symbol: "USDC", name: "USD Coin", icon: "💵", balance: "2,450.00" },
-  { symbol: "ETH", name: "Ethereum", icon: "⟠", balance: "1.245" },
-  { symbol: "USDT", name: "Tether", icon: "💲", balance: "1,200.00" },
-  { symbol: "WBTC", name: "Wrapped Bitcoin", icon: "₿", balance: "0.0234" },
+  { symbol: "USDC", name: "USD Coin", icon: "💵" },
+  { symbol: "ETH", name: "Ethereum", icon: "⟠" },
+  { symbol: "USDT", name: "Tether", icon: "💲" },
+  { symbol: "WBTC", name: "Wrapped Bitcoin", icon: "₿" },
 ];
 
 interface TokenSelectorProps {
@@ -30,12 +31,7 @@ export function TokenSelector({ selected, onSelect }: TokenSelectorProps) {
               <>
                 <span className="text-2xl">{selected.icon}</span>
                 <div className="text-left">
-                  <div>{selected.symbol}</div>
-                  {selected.balance && (
-                    <div className="text-xs text-muted-foreground">
-                      Balance: {selected.balance}
-                    </div>
-                  )}
+                  <div className="font-medium">{selected.symbol}</div>
                 </div>
               </>
             ) : (
@@ -50,16 +46,13 @@ export function TokenSelector({ selected, onSelect }: TokenSelectorProps) {
           <DropdownMenuItem
             key={token.symbol}
             onClick={() => onSelect(token)}
-            className="flex items-center gap-3 py-3 cursor-pointer hover:bg-secondary"
+            className="flex items-center gap-3 py-3 cursor-pointer hover:bg-secondary transition-colors"
           >
             <span className="text-2xl">{token.icon}</span>
             <div className="flex-1">
               <div className="font-medium">{token.symbol}</div>
               <div className="text-xs text-muted-foreground">{token.name}</div>
             </div>
-            {token.balance && (
-              <div className="text-sm text-muted-foreground">{token.balance}</div>
-            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

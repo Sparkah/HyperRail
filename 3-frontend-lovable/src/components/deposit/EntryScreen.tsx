@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, Zap } from "lucide-react";
+import { ArrowRight, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChainSelector } from "./ChainSelector";
 import { TokenSelector } from "./TokenSelector";
@@ -7,25 +7,35 @@ import { AmountInput } from "./AmountInput";
 import { Chain, Token } from "@/types/deposit";
 
 interface EntryScreenProps {
-  selectedChain: Chain | null;
-  selectedToken: Token | null;
+  selectedSourceChain: Chain | null;
+  selectedSourceToken: Token | null;
+  selectedDestChain: Chain | null;
+  selectedDestToken: Token | null;
   amount: string;
-  onChainSelect: (chain: Chain) => void;
-  onTokenSelect: (token: Token) => void;
+  onSourceChainSelect: (chain: Chain) => void;
+  onSourceTokenSelect: (token: Token) => void;
+  onDestChainSelect: (chain: Chain) => void;
+  onDestTokenSelect: (token: Token) => void;
   onAmountChange: (amount: string) => void;
   onContinue: () => void;
 }
 
 export function EntryScreen({
-  selectedChain,
-  selectedToken,
+  selectedSourceChain,
+  selectedSourceToken,
+  selectedDestChain,
+  selectedDestToken,
   amount,
-  onChainSelect,
-  onTokenSelect,
+  onSourceChainSelect,
+  onSourceTokenSelect,
+  onDestChainSelect,
+  onDestTokenSelect,
   onAmountChange,
   onContinue,
 }: EntryScreenProps) {
-  const isValid = selectedChain && selectedToken && parseFloat(amount) > 0;
+  // Prevent same-chain transfers
+  const isSameChain = selectedSourceChain?.id === selectedDestChain?.id && selectedSourceChain !== null;
+  const isValid = selectedSourceChain && selectedSourceToken && selectedDestChain && selectedDestToken && parseFloat(amount) > 0 && !isSameChain;
 
   return (
     <motion.div
@@ -34,56 +44,42 @@ export function EntryScreen({
       exit={{ opacity: 0, y: -20 }}
       className="space-y-6"
     >
-      {/* Header */}
       <div className="text-center space-y-2">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20"
-        >
-          <Zap className="h-4 w-4 text-primary" />
-          <span className="text-sm text-primary font-medium">Powered by LI.FI</span>
-        </motion.div>
-        <h1 className="text-3xl font-bold">
-          Deposit to <span className="gradient-text">Hyperliquid</span>
-        </h1>
-        <p className="text-muted-foreground">
-          Swap and bridge any token. Start trading in one step.
-        </p>
+        <h1 className="text-3xl font-bold">Bridge to <span className="gradient-text">HyperRail</span></h1>
+        <p className="text-muted-foreground">Select your route and amount.</p>
       </div>
 
-      {/* Form */}
-      <div className="glass-card p-6 space-y-5">
+      <div className="glass-card p-6 space-y-4">
+        {/* From Section */}
         <div className="space-y-2">
-          <label className="text-sm font-medium text-muted-foreground">From Chain</label>
-          <ChainSelector selected={selectedChain} onSelect={onChainSelect} />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-muted-foreground">Token</label>
-          <TokenSelector selected={selectedToken} onSelect={onTokenSelect} />
-        </div>
-
-        <AmountInput
-          value={amount}
-          onChange={onAmountChange}
-          token={selectedToken}
-        />
-
-        {/* Destination indicator */}
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border/50">
-          <div className="flex-1">
-            <div className="text-sm text-muted-foreground">You will receive</div>
-            <div className="font-semibold">USDC on Hyperliquid</div>
+          <label className="text-xs font-bold uppercase text-muted-foreground">From</label>
+          <div className="grid grid-cols-2 gap-2">
+            <ChainSelector selected={selectedSourceChain} onSelect={onSourceChainSelect} />
+            <TokenSelector selected={selectedSourceToken} onSelect={onSourceTokenSelect} />
           </div>
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-lg">💵</span>
+          <AmountInput value={amount} onChange={onAmountChange} token={selectedSourceToken} />
+        </div>
+
+        <div className="flex justify-center -my-2 relative z-10">
+          <div className="bg-background border border-border p-1.5 rounded-full">
+            <ArrowDown className="h-4 w-4 text-primary" />
           </div>
         </div>
+
+        {/* To Section */}
+        <div className="space-y-2">
+          <label className="text-xs font-bold uppercase text-muted-foreground">To</label>
+          <div className="grid grid-cols-2 gap-2">
+            <ChainSelector selected={selectedDestChain} onSelect={onDestChainSelect} />
+            <TokenSelector selected={selectedDestToken} onSelect={onDestTokenSelect} />
+          </div>
+        </div>
+
+        {isSameChain && (
+          <p className="text-destructive text-xs text-center font-medium">Source and destination chains must be different.</p>
+        )}
       </div>
 
-      {/* CTA */}
       <Button
         variant="glow"
         size="lg"
@@ -92,7 +88,7 @@ export function EntryScreen({
         onClick={onContinue}
       >
         Preview Route
-        <ArrowRight className="h-5 w-5" />
+        <ArrowRight className="h-5 w-5 ml-2\" />
       </Button>
     </motion.div>
   );
