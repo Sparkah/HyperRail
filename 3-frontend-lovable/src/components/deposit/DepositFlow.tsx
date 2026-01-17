@@ -21,18 +21,50 @@ const CHAIN_MAP: Record<string, number> = {
 // DepositFlow.tsx
 
 // FIX: Use a nested mapping so balance checks find the right chain address
+// DepositFlow.tsx
+
+const CHAIN_TO_ID: Record<string, number> = {
+  ethereum: 1,
+  arbitrum: 42161,
+  polygon: 137,
+  optimism: 10,
+  base: 8453,
+  hyperevm: 999,
+};
+
+const ETH_ID = CHAIN_TO_ID["ethereum"];
+const POLYGON_ID = CHAIN_TO_ID["polygon"];
+const ARBITRUM_ID = CHAIN_TO_ID["arbitrum"];
+const OPTIMISM_ID = CHAIN_TO_ID["optimism"];
+const BASE_ID = CHAIN_TO_ID["base"];
+
 const TOKEN_ADDRESSES: Record<string, Record<number, string>> = {
   "USDC": {
-    1: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eb48",
-    137: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
-    42161: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    8453: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    // FIX: Change System Address to Native USDC Address
-    999: "0xb883D9957385aE326177196695275e649Ba630f6a", //my address: 0x975d106BA75Bcc52A72f20895cb475c4673E5c72
+    [ETH_ID]: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    [POLYGON_ID]: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
+    [ARBITRUM_ID]: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    [BASE_ID]: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    [OPTIMISM_ID]: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
+    999: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
   },
   "USDT": {
-    1: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    [ETH_ID]: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     137: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
+    42161: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+    10: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+    8453: "0xfde4C96253e2091F92b421783ad396340417002b",
+  },
+  "ETH": {
+    [ETH_ID]: "0x0000000000000000000000000000000000000000", // Native ETH
+    137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", // WETH on Polygon
+    42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH on Arbitrum
+    10: "0x4200000000000000000000000000000000000006", // WETH on Optimism
+    8453: "0x4200000000000000000000000000000000000006", // WETH on Base
+  },
+  "WBTC": {
+    [ETH_ID]: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    137: "0x1BFD67037B42Cf73acF2047067bd4F2C47DafBb3",
+    42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
   }
 };
 
@@ -85,7 +117,7 @@ export function DepositFlow() {
     try {
       const rawAmount = (parseFloat(amount) * 1_000_000).toString();
       const fromChainId = CHAIN_MAP[sourceChain.id];
-
+      debugger;
       const response = await fetch(`${WORKER_URL}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
