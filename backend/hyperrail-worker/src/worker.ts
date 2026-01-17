@@ -45,10 +45,11 @@ export default {
             return new Response(null, {
                 status: 204,
                 headers: {
-                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json;charset=UTF-8",
+                    // Use your specific frontend domain instead of '*' for better security
+                    "Access-Control-Allow-Origin": "https://hyperrail.pages.dev",
                     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-                    "Access-Control-Max-Age": "86400",
                 },
             });
         }
