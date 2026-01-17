@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {HelloGift} from "../src/HelloGift.sol";
+import {HyperRail} from "../src/HyperRail.sol";
 import {ERC20Mock} from "../test/mocks/ERC20Mock.sol";
 
 contract TestE2E is Script {
@@ -16,7 +16,7 @@ contract TestE2E is Script {
 
     function run() external {
         ERC20Mock usdc = ERC20Mock(USDC);
-        HelloGift gift = HelloGift(GIFT);
+        HyperRail gift = HyperRail(GIFT);
 
         address alice = vm.addr(ALICE_KEY);
         address bob = vm.addr(BOB_KEY);

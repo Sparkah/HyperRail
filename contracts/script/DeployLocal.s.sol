@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console} from "forge-std/Script.sol";
-import {HelloGift} from "../src/HelloGift.sol";
+import {HyperRail} from "../src/HyperRail.sol";
 import {ERC20Mock} from "../test/mocks/ERC20Mock.sol";
 
 contract DeployLocal is Script {
@@ -15,9 +15,9 @@ contract DeployLocal is Script {
         ERC20Mock usdc = new ERC20Mock("USD Coin", "USDC", 6);
         console.log("USDC deployed to:", address(usdc));
 
-        // Deploy HelloGift
-        HelloGift gift = new HelloGift(address(usdc));
-        console.log("HelloGift deployed to:", address(gift));
+        // Deploy HyperRail
+        HyperRail gift = new HyperRail(address(usdc));
+        console.log("HyperRail deployed to:", address(gift));
 
         // Mint some USDC to the deployer for testing
         address deployer = vm.addr(deployerKey);

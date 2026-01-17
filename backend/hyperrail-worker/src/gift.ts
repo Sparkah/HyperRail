@@ -52,8 +52,8 @@ function getChain(rpcUrl: string) {
 	return hyperEvmTestnet;
 }
 
-// HelloGift contract ABI (only the functions we need)
-const HelloGiftABI = [
+// HyperRail contract ABI (only the functions we need)
+const HyperRailABI = [
 	{
 		name: 'claim',
 		type: 'function',
@@ -206,7 +206,7 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 		// Submit claim transaction
 		const txHash = await client.writeContract({
 			address: env.GIFT_CONTRACT as Hex,
-			abi: HelloGiftABI,
+			abi: HyperRailABI,
 			functionName: 'claim',
 			args: [claimSecret as Hex, walletAddress as Hex],
 		});
