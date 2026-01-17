@@ -7,6 +7,15 @@
 		"enabled": true
 	},
 	"vars": {
-		"LIFI_INTEGRATOR": "HyperRail"
-	}
+		"LIFI_INTEGRATOR": "HyperRail",
+		"HYPEREVM_RPC": "https://rpc.hyperliquid-testnet.xyz/evm",
+		"GIFT_CONTRACT": ""
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "hyperrail",
+			"database_id": ""
+		}
+	]
 }
