@@ -1,0 +1,21 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "hyperrail-worker",
+	"main": "src/worker.ts",
+	"compatibility_date": "2025-09-27",
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"LIFI_INTEGRATOR": "HyperRail",
+		"HYPEREVM_RPC": "https://rpc.hyperliquid-testnet.xyz/evm",
+		"GIFT_CONTRACT": ""
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "hyper-rail-db",
+			"database_id": "536740c9-3ce8-4d24-8b35-7539f07e03e1"
+		}
+	]
+}
