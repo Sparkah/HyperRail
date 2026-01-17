@@ -1,0 +1,18 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+solc = "0.8.20"
+
+# Ignore test files in dependencies
+ignore = ["lib/**/test/**", "lib/**/tests/**"]
+
+[rpc_endpoints]
+hyperevm = "https://rpc.hyperliquid.xyz/evm"
+hyperevm_testnet = "https://rpc.hyperliquid-testnet.xyz/evm"
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = false

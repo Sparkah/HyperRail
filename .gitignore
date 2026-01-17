@@ -1,0 +1,27 @@
+# Foundry build artifacts
+cache/
+out/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# Broadcast (deployment logs - may contain sensitive info)
+broadcast/
+
+# Docs
+docs/
+
+# Coverage
+lcov.info
+coverage/
