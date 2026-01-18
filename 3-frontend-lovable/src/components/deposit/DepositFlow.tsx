@@ -1,91 +1,28 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useAccount, useBalance, useSendTransaction } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
+import { parseUnits } from "viem";
 import { EntryScreen } from "./EntryScreen";
 import { RouteConfirmation } from "./RouteConfirmation";
 import { ProgressTracker } from "./ProgressTracker";
 import { SuccessScreen } from "./SuccessScreen";
-import { DepositStep, RouteInfo, RouteStep, Chain, Token } from "@/types/deposit";
-
-const CHAIN_MAP: Record<string, number> = {
-  ethereum: 1,
-  arbitrum: 42161,
-  polygon: 137,
-  optimism: 10,
-  base: 8453,
-  hyperevm: 999,
-};
-
-// Map token symbols to contract addresses per chain
-// DepositFlow.tsx
-
-// FIX: Use a nested mapping so balance checks find the right chain address
-// DepositFlow.tsx
-
-const CHAIN_TO_ID: Record<string, number> = {
-  ethereum: 1,
-  arbitrum: 42161,
-  polygon: 137,
-  optimism: 10,
-  base: 8453,
-  hyperevm: 999,
-};
-
-const ETH_ID = CHAIN_TO_ID["ethereum"];
-const POLYGON_ID = CHAIN_TO_ID["polygon"];
-const ARBITRUM_ID = CHAIN_TO_ID["arbitrum"];
-const OPTIMISM_ID = CHAIN_TO_ID["optimism"];
-const BASE_ID = CHAIN_TO_ID["base"];
-
-const TOKEN_ADDRESSES: Record<string, Record<number, string>> = {
-  "USDC": {
-    [ETH_ID]: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    [POLYGON_ID]: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
-    [ARBITRUM_ID]: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    [BASE_ID]: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    [OPTIMISM_ID]: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
-    999: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
-  },
-  "USDT": {
-    [ETH_ID]: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-    137: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-    42161: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
-    10: "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
-    8453: "0xfde4C96253e2091F92b421783ad396340417002b",
-  },
-  "ETH": {
-    [ETH_ID]: "0x0000000000000000000000000000000000000000", // Native ETH
-    137: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", // WETH on Polygon
-    42161: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", // WETH on Arbitrum
-    10: "0x4200000000000000000000000000000000000006", // WETH on Optimism
-    8453: "0x4200000000000000000000000000000000000006", // WETH on Base
-  },
-  "WBTC": {
-    [ETH_ID]: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
-    137: "0x1BFD67037B42Cf73acF2047067bd4F2C47DafBb3",
-    42161: "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
-  }
-};
+import { DepositStep, RouteInfo, Chain, Token } from "@/types/deposit";
+import { useTokenApproval } from "@/hooks/useTokenApproval";
+import { useGiftStatus } from "@/hooks/useGiftStatus";
+import { CHAINS, TOKENS, getTokenAddress, isNativeToken } from "@/constants/chains";
 
 const WORKER_URL = import.meta.env.DEV
   ? "http://localhost:8787"
   : "https://hyperrail-worker.timopro16.workers.dev";
 
-const DEST_CHAIN: Chain = { id: "hyperevm", name: "HyperEVM", icon: "⚡" };
-const DEST_TOKEN: Token = { symbol: "USDC", name: "USD Coin", icon: "💵" };
-
-const defaultSteps: RouteStep[] = [
-  { id: "1", type: "swap", title: "Swap Assets", description: "Preparing funds", status: "pending" },
-  { id: "2", type: "bridge", title: "Cross-chain Bridge", description: "Transferring to destination", status: "pending" },
-  { id: "3", type: "confirm", title: "Arrival Confirmation", description: "Verifying arrival", status: "pending" },
-  { id: "4", type: "deposit", title: "Hyperliquid Deposit", description: "Finalizing", status: "pending" },
-];
+const DEST_CHAIN: Chain = { id: "hyperevm", name: CHAINS.hyperevm.name, icon: CHAINS.hyperevm.icon };
+const DEST_TOKEN: Token = { symbol: "USDC", name: TOKENS.USDC.name, icon: TOKENS.USDC.icon };
 
 export function DepositFlow() {
   const { isConnected, address } = useAccount();
   const { openConnectModal } = useConnectModal();
-  const { sendTransactionAsync } = useSendTransaction(); // Hook for signing
+  const { sendTransactionAsync } = useSendTransaction();
 
   const [step, setStep] = useState<DepositStep>("entry");
   const [amount, setAmount] = useState("");
@@ -96,38 +33,113 @@ export function DepositFlow() {
   const [sourceToken, setSourceToken] = useState<Token | null>(null);
 
   const [route, setRoute] = useState<RouteInfo | null>(null);
-  const [progressSteps, setProgressSteps] = useState<RouteStep[]>([]);
 
-  const sId = sourceChain ? CHAIN_MAP[sourceChain.id] : undefined;
-  const tokenAddr = (sourceToken && sId) ? TOKEN_ADDRESSES[sourceToken.symbol]?.[sId] : undefined;
+  // Gift flow state
+  const [relayerAddress, setRelayerAddress] = useState<string | null>(null);
+  const [giftClaimId, setGiftClaimId] = useState<string | null>(null);
+  const [giftClaimSecret, setGiftClaimSecret] = useState<string | null>(null);
+
+  // Fetch relayer address on mount
+  useEffect(() => {
+    fetch(`${WORKER_URL}/api/config`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.relayerAddress) {
+          setRelayerAddress(data.relayerAddress);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch config:", err));
+  }, []);
+
+  const sId = sourceChain ? CHAINS[sourceChain.id as keyof typeof CHAINS]?.id : undefined;
+  const tokenAddr = (sourceToken && sId) ? getTokenAddress(sourceToken.symbol, sId) : undefined;
+  // For native tokens (ETH), pass undefined to useBalance; for ERC20s, pass the address
+  const balanceTokenArg = tokenAddr && !isNativeToken(tokenAddr) ? tokenAddr as `0x${string}` : undefined;
 
   const { data: balanceData } = useBalance({
     address: address,
-    token: tokenAddr as `0x${string}`,
+    token: balanceTokenArg,
     chainId: sId,
-    query: { enabled: !!address && !!tokenAddr && !!sId }
+    query: { enabled: !!address && !!sId && (!!tokenAddr || sourceToken?.symbol === "ETH") }
   });
 
   const walletBalance = balanceData ? parseFloat(balanceData.formatted) : 0;
 
+  // Calculate raw amount for approval (assumes 6 decimals for USDC/USDT, 18 for ETH)
+  const tokenDecimals = sourceToken?.symbol === "ETH" ? 18 : 6;
+  const rawAmount = useMemo(() => {
+    if (!amount || isNaN(parseFloat(amount))) return 0n;
+    try {
+      return parseUnits(amount, tokenDecimals);
+    } catch {
+      return 0n;
+    }
+  }, [amount, tokenDecimals]);
+
+  // Get spender address from route (LI.FI contract)
+  const spenderAddress = route?.transactionRequest?.to as `0x${string}` | undefined;
+
+  // Token approval hook
+  const {
+    state: approvalState,
+    needsApproval,
+    approve,
+    error: approvalError,
+    reset: resetApproval,
+  } = useTokenApproval({
+    tokenAddress: tokenAddr as `0x${string}`,
+    spenderAddress,
+    amount: rawAmount,
+    userAddress: address,
+    chainId: sId,
+    enabled: step === "preview" && !!route,
+  });
+
+  // Poll gift status (handles bridge check + gift creation)
+  const { steps: liveSteps, status: giftStatus } = useGiftStatus({
+    claimId: giftClaimId,
+    enabled: step === "progress" && !!giftClaimId,
+    onComplete: () => setStep("success"),
+  });
+
   const handleContinue = async () => {
     if (!sourceChain || !sourceToken || !amount) return;
+
+    // Require wallet connection before fetching quote
+    // (LI.FI bakes the address into the transaction calldata)
+    if (!isConnected || !address) {
+      openConnectModal?.();
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
-      const rawAmount = (parseFloat(amount) * 1_000_000).toString();
-      const fromChainId = CHAIN_MAP[sourceChain.id];
+      const decimals = TOKENS[sourceToken.symbol as keyof typeof TOKENS]?.decimals ?? 18;
+      const quoteAmount = parseUnits(amount, decimals).toString();
+      const fromChainId = CHAINS[sourceChain.id as keyof typeof CHAINS].id;
+      const fromTokenAddr = getTokenAddress(sourceToken.symbol, fromChainId);
+      const toTokenAddr = getTokenAddress("USDC", CHAINS.hyperevm.id);
+
+      if (!fromTokenAddr || !toTokenAddr) {
+        throw new Error("Token not available on selected chain");
+      }
+
+      if (!relayerAddress) {
+        throw new Error("Relayer not configured. Please try again.");
+      }
 
       const response = await fetch(`${WORKER_URL}/api/quote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fromChain: fromChainId,
-          toChain: 999,
-          fromToken: TOKEN_ADDRESSES[sourceToken.symbol][fromChainId],
-          toToken: TOKEN_ADDRESSES["USDC"][999],
-          fromAmount: rawAmount,
-          fromAddress: address || "0x975d106BA75Bcc52A72f20895cb475c4673E5c72",
+          toChain: CHAINS.hyperevm.id,
+          fromToken: fromTokenAddr,
+          toToken: toTokenAddr,
+          fromAmount: quoteAmount,
+          fromAddress: address,
+          toAddress: relayerAddress, // USDC goes to relayer for gift creation
         }),
       });
 
@@ -135,21 +147,26 @@ export function DepositFlow() {
       if (!response.ok) throw new Error(data.error || "Failed to fetch quote");
 
       const receivedAmount = parseFloat(data.expectedOutput) / 1_000_000;
+      const gasUSD = parseFloat(data.fees?.gasUSD || "0");
+      const bridgeUSD = parseFloat(data.fees?.bridgeUSD || "0");
+      const totalFees = gasUSD + bridgeUSD;
+      // Use appropriate precision: 6 decimals for ETH/WETH/WBTC, 2 for stablecoins
+      const inputPrecision = ["ETH", "WETH", "WBTC"].includes(sourceToken.symbol) ? 6 : 2;
       setRoute({
         fromChain: sourceChain,
         fromToken: sourceToken,
         toChain: DEST_CHAIN,
         toToken: DEST_TOKEN,
-        amount: parseFloat(amount).toFixed(2),
+        amount: parseFloat(amount).toFixed(inputPrecision),
         estimatedOutput: receivedAmount.toFixed(2),
         estimatedTime: data.etaSeconds > 0 ? `~${Math.round(data.etaSeconds / 60)} min` : "~3 min",
         fees: {
-          gas: `$${parseFloat(data.fees.gasUSD || "0").toFixed(2)}`,
-          bridge: `$${parseFloat(data.fees.bridgeUSD || "0").toFixed(2)}`,
-          total: `$${(parseFloat(amount) - receivedAmount).toFixed(2)}`,
+          gas: `$${gasUSD.toFixed(2)}`,
+          bridge: `$${bridgeUSD.toFixed(2)}`,
+          total: `$${totalFees.toFixed(2)}`,
         },
         transactionRequest: data.transactionRequest, // Captured for signing
-        steps: data.steps || defaultSteps,
+        steps: data.steps || [],
       });
 
       setStep("preview");
@@ -163,7 +180,7 @@ export function DepositFlow() {
 
   const handleConfirm = async () => {
     if (!isConnected) { openConnectModal?.(); return; }
-    
+
     if (!route?.transactionRequest) {
       setError("No transaction data available. Please try again.");
       return;
@@ -174,9 +191,22 @@ export function DepositFlow() {
       return;
     }
 
+    setError(null);
+
+    // Step 1: Approve if needed
+    if (needsApproval) {
+      const approved = await approve();
+      if (!approved) {
+        setError(approvalError || "Approval failed. Please try again.");
+        return;
+      }
+      // After approval succeeds, the button will update to "Confirm Deposit"
+      // User needs to click again to execute the swap
+      return;
+    }
+
+    // Step 2: Execute swap transaction
     try {
-      setError(null);
-      // SIGN AND BROADCAST
       const tx = await sendTransactionAsync({
         to: route.transactionRequest.to as `0x${string}`,
         data: route.transactionRequest.data as `0x${string}`,
@@ -184,13 +214,50 @@ export function DepositFlow() {
       });
 
       console.log("Transaction Hash:", tx);
-      setProgressSteps(defaultSteps.map((s, i) => ({ ...s, status: i === 0 ? "active" : "pending" })));
+
+      // Step 3: Create gift intent on backend
+      const fromChainId = CHAINS[sourceChain!.id as keyof typeof CHAINS].id;
+      const giftResponse = await fetch(`${WORKER_URL}/api/gift`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txHash: tx,
+          fromChain: fromChainId,
+          amount: route.estimatedOutput, // Use expected output amount
+          senderAddress: address,
+        }),
+      });
+
+      const giftData = await giftResponse.json();
+      if (!giftResponse.ok) {
+        throw new Error(giftData.error || "Failed to create gift");
+      }
+
+      console.log("Gift created:", giftData);
+      setGiftClaimId(giftData.claimId);
+      setGiftClaimSecret(giftData.claimSecret);
       setStep("progress");
     } catch (err: any) {
-      console.error("Signing failed:", err);
-      setError(err.message || "User rejected transaction.");
+      console.error("Swap/Gift failed:", err);
+      setError(err.shortMessage || err.message || "Transaction rejected.");
     }
   };
+
+  // Derive button text and state from approval status
+  const getButtonConfig = () => {
+    if (approvalState === "checking") {
+      return { text: "Checking allowance...", disabled: true, loading: true };
+    }
+    if (approvalState === "approving") {
+      return { text: `Approving ${sourceToken?.symbol}...`, disabled: true, loading: true };
+    }
+    if (needsApproval) {
+      return { text: `Approve ${sourceToken?.symbol}`, disabled: false, loading: false };
+    }
+    return { text: "Confirm Deposit", disabled: false, loading: false };
+  };
+
+  const buttonConfig = getButtonConfig();
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -222,21 +289,36 @@ export function DepositFlow() {
             <RouteConfirmation
               key="preview"
               route={route}
-              onBack={() => { setStep("entry"); setError(null); }}
+              onBack={() => {
+                setStep("entry");
+                setError(null);
+                resetApproval();
+              }}
               onConfirm={handleConfirm}
+              buttonText={buttonConfig.text}
+              buttonDisabled={buttonConfig.disabled}
+              buttonLoading={buttonConfig.loading}
+              error={error || approvalError}
             />
           )}
 
           {step === "progress" && (
-            <ProgressTracker key="progress" steps={progressSteps} onComplete={() => setStep("success")} />
+            <ProgressTracker key="progress" steps={liveSteps} onComplete={() => setStep("success")} />
           )}
 
           {step === "success" && (
             <SuccessScreen
               key="success"
               amount={route?.estimatedOutput || "0"}
+              claimSecret={giftClaimSecret}
               onOpenHyperliquid={() => window.open("https://app.hyperliquid.xyz", "_blank")}
-              onDepositMore={() => { setStep("entry"); setAmount(""); setError(null); }}
+              onCreateAnother={() => {
+                setStep("entry");
+                setAmount("");
+                setError(null);
+                setGiftClaimId(null);
+                setGiftClaimSecret(null);
+              }}
             />
           )}
         </AnimatePresence>

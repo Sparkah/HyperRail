@@ -1,6 +1,8 @@
 import { handleCreateGift, handleGetGift, handleClaim } from './gift';
 import { json } from './utils';
 import { audit } from './logger';
+import { privateKeyToAccount } from 'viem/accounts';
+import type { Hex } from 'viem';
 
 // =============================================================================
 // Environment
@@ -28,9 +30,10 @@ type QuoteRequest = {
     fromChain: number; // Source chain ID (e.g., 1 for Ethereum)
     fromToken: string; // Source token address
     fromAmount: string; // Amount in smallest unit (wei)
-    toChain: number; // Destination chain ID (998 for HyperEVM)
+    toChain: number; // Destination chain ID (999 for HyperEVM)
     toToken: string; // Destination token address (USDC on HyperEVM)
-    fromAddress: string; // Sender's wallet address
+    fromAddress: string; // Sender's wallet address (signs the tx)
+    toAddress?: string; // Recipient address on destination chain (defaults to fromAddress)
 };
 
 // =============================================================================
@@ -60,9 +63,17 @@ export default {
         let response: Response;
 
         try {
+            // Config endpoint (exposes relayer address for frontend)
+            if (url.pathname === '/api/config' && request.method === 'GET') {
+                response = await handleConfig(env);
+            }
             // LI.FI quote proxy
-            if (url.pathname === '/api/quote' && request.method === 'POST') {
+            else if (url.pathname === '/api/quote' && request.method === 'POST') {
                 response = await handleQuote(request, env);
+            }
+            // LI.FI status proxy
+            else if (url.pathname === '/api/status' && request.method === 'GET') {
+                response = await handleStatus(url, env);
             }
             // Gift endpoints
             else if (url.pathname === '/api/gift' && request.method === 'POST') {
@@ -103,7 +114,7 @@ async function handleQuote(request: Request, env: Env): Promise<Response> {
         return json({ error: 'Invalid JSON body' }, 400);
     }
 
-    const { fromChain, toChain, fromToken, toToken, fromAmount, fromAddress } = body;
+    const { fromChain, toChain, fromToken, toToken, fromAmount, fromAddress, toAddress } = body;
 
     if (!fromChain || !toChain || !fromToken || !toToken || !fromAmount || !fromAddress) {
         return json({ error: 'Missing required fields' }, 400);
@@ -116,6 +127,7 @@ async function handleQuote(request: Request, env: Env): Promise<Response> {
         toToken: body.toToken,
         fromAmount: body.fromAmount,
         fromAddress: body.fromAddress,
+        toAddress: toAddress || fromAddress, // Use toAddress if provided, otherwise fromAddress
         integrator: env.LIFI_INTEGRATOR || 'HyperRail',
     });
 
@@ -139,6 +151,67 @@ async function handleQuote(request: Request, env: Env): Promise<Response> {
             etaSeconds: data.estimate.executionDuration,
             transactionRequest: data.transactionRequest,
             steps: data.action?.steps || [],
+        });
+    } catch (error: any) {
+        return json({ error: 'Worker Internal Error', message: error.message }, 500);
+    }
+}
+
+// =============================================================================
+// LI.FI Status Endpoint
+// =============================================================================
+
+/**
+ * Return public config (relayer address for LI.FI toAddress).
+ */
+async function handleConfig(env: Env): Promise<Response> {
+    if (!env.RELAYER_PRIVATE_KEY) {
+        return json({ error: 'Relayer not configured' }, 503);
+    }
+
+    const account = privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex);
+
+    return json({
+        relayerAddress: account.address,
+        giftContract: env.GIFT_CONTRACT,
+        chainId: 999, // HyperEVM mainnet
+    });
+}
+
+/**
+ * Proxy LI.FI status API for transaction tracking.
+ * Frontend polls this to get real-time transaction status.
+ */
+async function handleStatus(url: URL, env: Env): Promise<Response> {
+    const txHash = url.searchParams.get('txHash');
+    const fromChain = url.searchParams.get('fromChain');
+    const toChain = url.searchParams.get('toChain');
+
+    if (!txHash || !fromChain) {
+        return json({ error: 'Missing required params: txHash, fromChain' }, 400);
+    }
+
+    const params = new URLSearchParams({
+        txHash,
+        fromChain,
+        ...(toChain && { toChain }),
+    });
+
+    try {
+        const lifiRes = await fetch(`https://li.quest/v1/status?${params.toString()}`);
+        const data = (await lifiRes.json()) as any;
+
+        if (!lifiRes.ok) {
+            return json({ error: 'LI.FI status failed', detail: data }, 502);
+        }
+
+        return json({
+            status: data.status, // NOT_FOUND, PENDING, DONE, FAILED
+            substatus: data.substatus,
+            substatusMessage: data.substatusMessage,
+            tool: data.tool,
+            sending: data.sending,
+            receiving: data.receiving,
         });
     } catch (error: any) {
         return json({ error: 'Worker Internal Error', message: error.message }, 500);
