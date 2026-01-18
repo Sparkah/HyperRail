@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { RouteStep } from "@/types/deposit";
 
 const WORKER_URL = import.meta.env.DEV
@@ -34,6 +34,10 @@ export function useGiftStatus({
   const [status, setStatus] = useState<GiftStatus>("pending_bridge");
   const [steps, setSteps] = useState<RouteStep[]>(defaultSteps);
   const [error, setError] = useState<string | null>(null);
+
+  // Use ref to avoid onComplete in dependency array (prevents infinite loop)
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   const updateSteps = useCallback((giftStatus: GiftStatus) => {
     let newSteps = [...defaultSteps];
@@ -95,7 +99,7 @@ export function useGiftStatus({
 
         if (newStatus === "completed") {
           clearInterval(intervalId);
-          onComplete?.();
+          onCompleteRef.current?.();
         } else if (newStatus === "failed") {
           setError(data.error || "Gift creation failed");
           clearInterval(intervalId);
@@ -118,7 +122,7 @@ export function useGiftStatus({
       isCancelled = true;
       clearInterval(intervalId);
     };
-  }, [claimId, enabled, updateSteps, onComplete]);
+  }, [claimId, enabled, updateSteps]);
 
   return { status, steps, error };
 }
