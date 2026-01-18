@@ -75,8 +75,28 @@ const USDC_ADDRESSES: Record<number, Hex> = {
 	999: '0xb88339CB7199b77E23DB6E890353E22632Ba630f' as Hex, // Mainnet
 };
 
-// USDC system address for EVM → Core bridging (token index 0)
-const USDC_SYSTEM_ADDRESS = '0x2000000000000000000000000000000000000000' as Hex;
+// CoreDepositWallet contract for EVM → Core bridging (Circle's bridge contract)
+const CORE_DEPOSIT_WALLET: Record<number, Hex> = {
+	998: '0x0b80659a4076e9e93c7dbe0f10675a16a3e5c206' as Hex, // Testnet
+	999: '0x6b9e773128f453f5c2c60935ee2de2cbc5390a24' as Hex, // Mainnet
+};
+
+// Spot destination for CoreDepositWallet.deposit()
+const SPOT_DEX = 4294967295; // type(uint32).max = spot balance
+
+// CoreDepositWallet ABI (minimal)
+const CoreDepositWalletABI = [
+	{
+		name: 'deposit',
+		type: 'function',
+		stateMutability: 'nonpayable',
+		inputs: [
+			{ name: 'amount', type: 'uint256' },
+			{ name: 'destinationDex', type: 'uint32' },
+		],
+		outputs: [],
+	},
+] as const;
 
 // USDC token ID on HyperCore (for spotSend)
 const USDC_TOKEN_ID = '0x6d1e7cde53ba9467b783cb7c530ce054';
@@ -364,14 +384,30 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 			transport: http(env.HYPEREVM_RPC),
 		});
 
-		// Get gift amount from DB for the spotSend
+		// Validate USDC is configured for this chain
+		if (!usdcAddress || usdcAddress === '0x') {
+			audit.claimFailed(ctx, 'USDC not configured for this chain');
+			return json({ error: 'USDC not configured for this chain' }, 503);
+		}
+
+		// Get gift from DB and validate status
 		const giftResult = await env.DB.prepare(`
-			SELECT amount FROM gifts WHERE claim_id = ?
+			SELECT amount, status FROM gifts WHERE claim_id = ?
 		`).bind(claimId).first();
 
 		if (!giftResult) {
 			audit.claimFailed(ctx, 'Gift not found in database');
 			return json({ error: 'Gift not found' }, 404);
+		}
+
+		const giftStatus = giftResult.status as string;
+		if (giftStatus === 'claimed') {
+			audit.claimFailed(ctx, 'Gift already claimed');
+			return json({ error: 'Gift already claimed' }, 409);
+		}
+		if (giftStatus !== 'completed') {
+			audit.claimFailed(ctx, `Gift not ready to claim (status: ${giftStatus})`);
+			return json({ error: 'Gift not ready to claim', status: giftStatus }, 400);
 		}
 
 		const giftAmount = giftResult.amount as string;
@@ -400,23 +436,50 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 		console.log(`[Claim] Step 1 complete: ${claimTxHash}`);
 
 		// =========================================================================
-		// Step 2: Bridge USDC from EVM to Core (transfer to system address)
+		// Step 2: Bridge USDC from EVM to Core via CoreDepositWallet
 		// =========================================================================
-		console.log(`[Claim] Step 2: Bridging ${giftAmount} USDC to Core`);
+		console.log(`[Claim] Step 2: Bridging ${giftAmount} USDC to Core via CoreDepositWallet`);
 
 		const amountWei = BigInt(Math.floor(parseFloat(giftAmount) * 1_000_000));
+		const coreDepositWallet = CORE_DEPOSIT_WALLET[chain.id];
 
-		const bridgeTxHash = await walletClient.writeContract({
+		if (!coreDepositWallet) {
+			audit.claimFailed(ctx, 'CoreDepositWallet not configured for this chain');
+			return json({ error: 'CoreDepositWallet not configured' }, 503);
+		}
+
+		// Step 2a: Approve USDC to CoreDepositWallet if needed
+		const allowance = await publicClient.readContract({
 			address: usdcAddress,
 			abi: erc20Abi,
-			functionName: 'transfer',
-			args: [USDC_SYSTEM_ADDRESS, amountWei],
+			functionName: 'allowance',
+			args: [account.address, coreDepositWallet],
+		});
+
+		if (allowance < amountWei) {
+			console.log(`[Claim] Approving USDC to CoreDepositWallet...`);
+			const approveTxHash = await walletClient.writeContract({
+				address: usdcAddress,
+				abi: erc20Abi,
+				functionName: 'approve',
+				args: [coreDepositWallet, amountWei * 10n], // Approve 10x for future claims
+			});
+			await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+			console.log(`[Claim] Approval complete: ${approveTxHash}`);
+		}
+
+		// Step 2b: Deposit to CoreDepositWallet (bridges to relayer's Core spot balance)
+		const bridgeTxHash = await walletClient.writeContract({
+			address: coreDepositWallet,
+			abi: CoreDepositWalletABI,
+			functionName: 'deposit',
+			args: [amountWei, SPOT_DEX],
 		});
 
 		const bridgeReceipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTxHash });
 
 		if (bridgeReceipt.status === 'reverted') {
-			audit.claimFailed(ctx, 'Bridge transaction reverted');
+			audit.claimFailed(ctx, 'CoreDepositWallet deposit reverted');
 			return json({ error: 'Bridge to Core failed' }, 500);
 		}
 
