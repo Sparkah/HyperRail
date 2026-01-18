@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   ClaimMethodSelector,
   ExistingWalletClaim,
-  PrivyWalletClaim,
+  GeneratedWalletClaim,
 } from "@/components/claim";
 
 const WORKER_URL = import.meta.env.DEV
@@ -291,7 +291,7 @@ export default function ClaimPage() {
                 </div>
               )}
 
-              <PrivyWalletClaim onBack={handleBack} onAddressReady={handleAddressReady} />
+              <GeneratedWalletClaim onBack={handleBack} onAddressReady={handleAddressReady} />
             </>
           )}
 
