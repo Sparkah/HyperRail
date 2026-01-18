@@ -18,21 +18,32 @@ interface GiftInfo {
 }
 
 export default function ClaimPage() {
-  const { secret } = useParams<{ secret: string }>();
+  const { claimId } = useParams<{ claimId: string }>();
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>("loading");
   const [giftInfo, setGiftInfo] = useState<GiftInfo | null>(null);
   const [recipientAddress, setRecipientAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string>("");
 
-  // Fetch gift info on mount
+  // Get secret from hash fragment on mount (not sent to server)
   useEffect(() => {
-    if (!secret) {
+    const hash = window.location.hash.slice(1);
+    setSecret(hash);
+  }, []);
+
+  // Fetch gift info when claimId and secret are available
+  useEffect(() => {
+    if (!claimId || !secret) {
+      if (claimId && !secret) {
+        // Wait a tick for hash to be read
+        return;
+      }
       setClaimStatus("not_found");
       return;
     }
     fetchGiftInfo();
-  }, [secret]);
+  }, [claimId, secret]);
 
   // Auto-poll when pending
   useEffect(() => {
@@ -44,14 +55,17 @@ export default function ClaimPage() {
 
   const fetchGiftInfo = async () => {
     try {
-      // Validate secret format (should be 0x + 64 hex chars)
-      if (!secret || !/^0x[0-9a-fA-F]{64}$/.test(secret)) {
+      // Validate claimId format (should be 0x + 64 hex chars)
+      if (!claimId || !/^0x[0-9a-fA-F]{64}$/.test(claimId)) {
         setClaimStatus("not_found");
         return;
       }
 
-      const { keccak256 } = await import("viem");
-      const claimId = keccak256(secret as `0x${string}`);
+      // Validate secret format
+      if (!secret || !/^0x[0-9a-fA-F]{64}$/.test(secret)) {
+        setClaimStatus("not_found");
+        return;
+      }
 
       const response = await fetch(`${WORKER_URL}/api/gift/${claimId}`);
       const data = await response.json();

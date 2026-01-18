@@ -317,6 +317,7 @@ export function DepositFlow() {
             <SuccessScreen
               key="success"
               amount={route?.estimatedOutput || "0"}
+              claimId={giftClaimId}
               claimSecret={giftClaimSecret}
               onOpenHyperliquid={() => window.open("https://app.hyperliquid.xyz", "_blank")}
               onCreateAnother={() => {

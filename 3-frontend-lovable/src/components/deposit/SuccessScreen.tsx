@@ -5,16 +5,18 @@ import { useState } from "react";
 
 interface SuccessScreenProps {
   amount: string;
+  claimId?: string | null;
   claimSecret?: string | null;
   onOpenHyperliquid: () => void;
   onCreateAnother: () => void;
 }
 
-export function SuccessScreen({ amount, claimSecret, onOpenHyperliquid, onCreateAnother }: SuccessScreenProps) {
+export function SuccessScreen({ amount, claimId, claimSecret, onOpenHyperliquid, onCreateAnother }: SuccessScreenProps) {
   const [copied, setCopied] = useState(false);
 
-  const claimUrl = claimSecret
-    ? `${window.location.origin}/claim/${claimSecret}`
+  // Use hash fragment for secret (not sent to server/logs)
+  const claimUrl = claimId && claimSecret
+    ? `${window.location.origin}/claim/${claimId}#${claimSecret}`
     : null;
 
   const handleCopy = async () => {

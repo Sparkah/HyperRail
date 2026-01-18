@@ -43,7 +43,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/claim/:secret" element={<ClaimPage />} />
+              <Route path="/claim/:claimId" element={<ClaimPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
