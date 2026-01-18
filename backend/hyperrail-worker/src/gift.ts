@@ -306,6 +306,9 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 		return json({ error: 'Relayer not configured' }, 503);
 	}
 
+	// Derive claimId from claimSecret
+	const claimId = keccak256(claimSecret as Hex);
+
 	audit.claimStarted(ctx, walletAddress);
 
 	const chain = getChain(env.HYPEREVM_RPC);
@@ -313,14 +316,19 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 	try {
 		// Create wallet client with relayer key
 		const account = privateKeyToAccount(env.RELAYER_PRIVATE_KEY as Hex);
-		const client = createWalletClient({
+		const walletClient = createWalletClient({
 			account,
 			chain,
 			transport: http(env.HYPEREVM_RPC),
 		});
 
+		const publicClient = createPublicClient({
+			chain,
+			transport: http(env.HYPEREVM_RPC),
+		});
+
 		// Submit claim transaction
-		const txHash = await client.writeContract({
+		const txHash = await walletClient.writeContract({
 			address: env.GIFT_CONTRACT as Hex,
 			abi: HyperRailABI,
 			functionName: 'claim',
@@ -328,9 +336,25 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 		});
 
 		audit.claimTxSubmitted(ctx, txHash, chain.name);
+
+		// Wait for transaction receipt
+		const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+		if (receipt.status === 'reverted') {
+			audit.claimFailed(ctx, 'Transaction reverted');
+			return json({ error: 'Claim transaction reverted' }, 500);
+		}
+
+		// Update DB with claimed status
+		await env.DB.prepare(`
+			UPDATE gifts
+			SET status = 'claimed', claim_tx_hash = ?, recipient_address = ?, claimed_at = CURRENT_TIMESTAMP
+			WHERE claim_id = ?
+		`).bind(txHash, walletAddress, claimId).run();
+
 		audit.claimSuccess(ctx, txHash, walletAddress);
 
-		return json({ success: true, txHash });
+		return json({ success: true, txHash, status: 'claimed' });
 	} catch (error: any) {
 		// Parse common errors
 		if (error.message?.includes('not found') || error.message?.includes('gift not found')) {

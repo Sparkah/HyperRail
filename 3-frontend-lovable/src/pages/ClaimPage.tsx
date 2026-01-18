@@ -90,6 +90,8 @@ export default function ClaimPage() {
       // Handle different statuses
       if (data.status === "completed") {
         setClaimStatus("ready");
+      } else if (data.status === "claimed") {
+        setClaimStatus("already_claimed");
       } else if (data.status === "pending_bridge" || data.status === "creating_gift") {
         setClaimStatus("pending");
       } else if (data.status === "failed") {
