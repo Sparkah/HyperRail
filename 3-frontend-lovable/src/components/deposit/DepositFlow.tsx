@@ -16,6 +16,8 @@ const WORKER_URL = import.meta.env.DEV
   ? "http://localhost:8787"
   : "https://hyperrail-worker.timopro16.workers.dev";
 
+const MAX_GIFT_AMOUNT = 25; // Maximum gift size in USD
+
 const DEST_CHAIN: Chain = { id: "hyperevm", name: CHAINS.hyperevm.name, icon: CHAINS.hyperevm.icon };
 const DEST_TOKEN: Token = { symbol: "USDC", name: TOKENS.USDC.name, icon: TOKENS.USDC.icon };
 
@@ -148,6 +150,12 @@ export function DepositFlow() {
       if (!response.ok) throw new Error(data.error || "Failed to fetch quote");
 
       const receivedAmount = parseFloat(data.expectedOutput) / 1_000_000;
+
+      // Validate against max gift amount
+      if (receivedAmount > MAX_GIFT_AMOUNT) {
+        throw new Error(`Maximum gift size is $${MAX_GIFT_AMOUNT}. You're trying to send $${receivedAmount.toFixed(2)}.`);
+      }
+
       const gasUSD = parseFloat(data.fees?.gasUSD || "0");
       const bridgeUSD = parseFloat(data.fees?.bridgeUSD || "0");
       const totalFees = gasUSD + bridgeUSD;

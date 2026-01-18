@@ -4,6 +4,12 @@ import { json } from './utils';
 import { audit, type RequestContext } from './logger';
 
 // =============================================================================
+// Constants
+// =============================================================================
+
+const MAX_GIFT_AMOUNT = 25; // Maximum gift size in USD
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -195,6 +201,17 @@ export async function handleCreateGift(request: Request, env: GiftEnv, ctx: Requ
 	if (!txHash || !fromChain || !amount || !senderAddress) {
 		audit.validationFailed(ctx, 'Missing required fields');
 		return json({ error: 'Missing required fields: txHash, fromChain, amount, senderAddress' }, 400);
+	}
+
+	// Validate amount is within limits
+	const amountNum = parseFloat(amount);
+	if (isNaN(amountNum) || amountNum <= 0) {
+		audit.validationFailed(ctx, 'Invalid amount');
+		return json({ error: 'Invalid amount' }, 400);
+	}
+	if (amountNum > MAX_GIFT_AMOUNT) {
+		audit.validationFailed(ctx, `Amount exceeds maximum gift size of $${MAX_GIFT_AMOUNT}`);
+		return json({ error: `Maximum gift size is $${MAX_GIFT_AMOUNT}` }, 400);
 	}
 
 	// Generate random claimSecret and derive claimId

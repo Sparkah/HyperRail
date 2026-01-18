@@ -1,15 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Gift, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  ClaimMethodSelector,
+  ExistingWalletClaim,
+  PrivyWalletClaim,
+} from "@/components/claim";
 
 const WORKER_URL = import.meta.env.DEV
   ? "http://localhost:8787"
   : "https://hyperrail-worker.timopro16.workers.dev";
 
-type ClaimStatus = "loading" | "pending" | "ready" | "claiming" | "success" | "error" | "not_found" | "already_claimed";
+type ClaimMethod = "existing" | "create" | null;
+type ClaimFlowStatus =
+  | "loading"
+  | "pending"
+  | "select_method"
+  | "wallet_setup"
+  | "claiming"
+  | "success"
+  | "error"
+  | "not_found"
+  | "already_claimed";
 
 interface GiftInfo {
   amount: string;
@@ -19,14 +33,14 @@ interface GiftInfo {
 
 export default function ClaimPage() {
   const { claimId } = useParams<{ claimId: string }>();
-  const [claimStatus, setClaimStatus] = useState<ClaimStatus>("loading");
+  const [flowStatus, setFlowStatus] = useState<ClaimFlowStatus>("loading");
   const [giftInfo, setGiftInfo] = useState<GiftInfo | null>(null);
-  const [recipientAddress, setRecipientAddress] = useState("");
+  const [claimMethod, setClaimMethod] = useState<ClaimMethod>(null);
   const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
   const [secret, setSecret] = useState<string>("");
 
-  // Get secret from hash fragment on mount (not sent to server)
+  // Get secret from hash fragment on mount
   useEffect(() => {
     const hash = window.location.hash.slice(1);
     setSecret(hash);
@@ -36,10 +50,9 @@ export default function ClaimPage() {
   useEffect(() => {
     if (!claimId || !secret) {
       if (claimId && !secret) {
-        // Wait a tick for hash to be read
         return;
       }
-      setClaimStatus("not_found");
+      setFlowStatus("not_found");
       return;
     }
     fetchGiftInfo();
@@ -47,23 +60,21 @@ export default function ClaimPage() {
 
   // Auto-poll when pending
   useEffect(() => {
-    if (claimStatus !== "pending") return;
+    if (flowStatus !== "pending") return;
 
     const interval = setInterval(fetchGiftInfo, 5000);
     return () => clearInterval(interval);
-  }, [claimStatus]);
+  }, [flowStatus]);
 
   const fetchGiftInfo = async () => {
     try {
-      // Validate claimId format (should be 0x + 64 hex chars)
       if (!claimId || !/^0x[0-9a-fA-F]{64}$/.test(claimId)) {
-        setClaimStatus("not_found");
+        setFlowStatus("not_found");
         return;
       }
 
-      // Validate secret format
       if (!secret || !/^0x[0-9a-fA-F]{64}$/.test(secret)) {
-        setClaimStatus("not_found");
+        setFlowStatus("not_found");
         return;
       }
 
@@ -72,51 +83,46 @@ export default function ClaimPage() {
 
       if (!response.ok) {
         if (response.status === 404) {
-          setClaimStatus("not_found");
+          setFlowStatus("not_found");
         } else {
           setError(data.error || "Failed to fetch gift");
-          setClaimStatus("error");
+          setFlowStatus("error");
         }
         return;
       }
 
-      // Store gift info regardless of status
       setGiftInfo({
         amount: data.amount,
         senderAddress: data.senderAddress,
         status: data.status,
       });
 
-      // Handle different statuses
       if (data.status === "completed") {
-        setClaimStatus("ready");
+        setFlowStatus("select_method");
       } else if (data.status === "claimed") {
-        setClaimStatus("already_claimed");
+        setFlowStatus("already_claimed");
       } else if (data.status === "pending_bridge" || data.status === "creating_gift") {
-        setClaimStatus("pending");
+        setFlowStatus("pending");
       } else if (data.status === "failed") {
         setError("This gift failed to process. Please contact the sender.");
-        setClaimStatus("error");
+        setFlowStatus("error");
       } else {
-        setClaimStatus("ready"); // Default to ready for unknown statuses
+        setFlowStatus("select_method");
       }
     } catch (err) {
       console.error("Failed to fetch gift:", err);
       setError("Failed to load gift information");
-      setClaimStatus("error");
+      setFlowStatus("error");
     }
   };
 
-  const handleClaim = async () => {
-    if (!secret || !recipientAddress) return;
+  const handleMethodSelect = (method: ClaimMethod) => {
+    setClaimMethod(method);
+    setFlowStatus("wallet_setup");
+  };
 
-    // Validate address format
-    if (!/^0x[0-9a-fA-F]{40}$/.test(recipientAddress)) {
-      setError("Invalid address format. Please enter a valid HyperEVM address.");
-      return;
-    }
-
-    setClaimStatus("claiming");
+  const handleAddressReady = useCallback(async (address: string) => {
+    setFlowStatus("claiming");
     setError(null);
 
     try {
@@ -125,7 +131,7 @@ export default function ClaimPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           claimSecret: secret,
-          walletAddress: recipientAddress,
+          walletAddress: address,
         }),
       });
 
@@ -133,17 +139,23 @@ export default function ClaimPage() {
 
       if (!response.ok) {
         setError(data.error || "Claim failed");
-        setClaimStatus("ready");
+        setFlowStatus("wallet_setup");
         return;
       }
 
-      setTxHash(data.txHash);
-      setClaimStatus("success");
+      setClaimTxHash(data.txHash);
+      setFlowStatus("success");
     } catch (err) {
       console.error("Claim failed:", err);
       setError("Failed to submit claim. Please try again.");
-      setClaimStatus("ready");
+      setFlowStatus("wallet_setup");
     }
+  }, [secret]);
+
+  const handleBack = () => {
+    setClaimMethod(null);
+    setFlowStatus("select_method");
+    setError(null);
   };
 
   return (
@@ -155,7 +167,7 @@ export default function ClaimPage() {
           className="glass-card p-8 space-y-6"
         >
           {/* Loading state */}
-          {claimStatus === "loading" && (
+          {flowStatus === "loading" && (
             <div className="flex flex-col items-center space-y-4">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
               <p className="text-muted-foreground">Loading gift...</p>
@@ -163,7 +175,7 @@ export default function ClaimPage() {
           )}
 
           {/* Not found */}
-          {claimStatus === "not_found" && (
+          {flowStatus === "not_found" && (
             <div className="flex flex-col items-center space-y-4 text-center">
               <AlertCircle className="h-12 w-12 text-destructive" />
               <h2 className="text-2xl font-bold">Gift Not Found</h2>
@@ -174,7 +186,7 @@ export default function ClaimPage() {
           )}
 
           {/* Already claimed */}
-          {claimStatus === "already_claimed" && (
+          {flowStatus === "already_claimed" && (
             <div className="flex flex-col items-center space-y-4 text-center">
               <CheckCircle2 className="h-12 w-12 text-primary" />
               <h2 className="text-2xl font-bold">Already Claimed</h2>
@@ -185,7 +197,7 @@ export default function ClaimPage() {
           )}
 
           {/* Pending - gift being prepared */}
-          {claimStatus === "pending" && giftInfo && (
+          {flowStatus === "pending" && giftInfo && (
             <div className="flex flex-col items-center space-y-6 text-center">
               <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center">
                 <Gift className="w-10 h-10 text-primary" />
@@ -207,7 +219,7 @@ export default function ClaimPage() {
           )}
 
           {/* Error state */}
-          {claimStatus === "error" && (
+          {flowStatus === "error" && (
             <div className="flex flex-col items-center space-y-4 text-center">
               <AlertCircle className="h-12 w-12 text-destructive" />
               <h2 className="text-2xl font-bold">Something went wrong</h2>
@@ -218,8 +230,8 @@ export default function ClaimPage() {
             </div>
           )}
 
-          {/* Ready to claim */}
-          {(claimStatus === "ready" || claimStatus === "claiming") && giftInfo && (
+          {/* Ready - Select claim method */}
+          {flowStatus === "select_method" && giftInfo && (
             <>
               {/* Header */}
               <div className="flex flex-col items-center text-center space-y-4">
@@ -240,52 +252,64 @@ export default function ClaimPage() {
                 <div className="text-4xl font-bold gradient-text">{giftInfo.amount} USDC</div>
               </div>
 
-              {/* Recipient input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Your HyperEVM wallet address
-                </label>
-                <Input
-                  placeholder="0x..."
-                  value={recipientAddress}
-                  onChange={(e) => setRecipientAddress(e.target.value)}
-                  className="font-mono"
-                  disabled={claimStatus === "claiming"}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter the address where you want to receive the USDC
-                </p>
+              {/* Method selector */}
+              <ClaimMethodSelector onSelect={handleMethodSelect} />
+            </>
+          )}
+
+          {/* Wallet setup - existing wallet */}
+          {flowStatus === "wallet_setup" && claimMethod === "existing" && giftInfo && (
+            <>
+              {/* Amount reminder */}
+              <div className="text-center p-4 bg-secondary/30 rounded-xl">
+                <div className="text-sm text-muted-foreground mb-1">Claiming</div>
+                <div className="text-2xl font-bold gradient-text">{giftInfo.amount} USDC</div>
               </div>
 
-              {/* Error message */}
               {error && (
                 <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
                   {error}
                 </div>
               )}
 
-              {/* Claim button */}
-              <Button
-                variant="glow"
-                size="lg"
-                className="w-full"
-                onClick={handleClaim}
-                disabled={!recipientAddress || claimStatus === "claiming"}
-              >
-                {claimStatus === "claiming" ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                    Claiming...
-                  </>
-                ) : (
-                  "Claim USDC"
-                )}
-              </Button>
+              <ExistingWalletClaim onBack={handleBack} onAddressReady={handleAddressReady} />
             </>
           )}
 
+          {/* Wallet setup - create new wallet */}
+          {flowStatus === "wallet_setup" && claimMethod === "create" && giftInfo && (
+            <>
+              {/* Amount reminder */}
+              <div className="text-center p-4 bg-secondary/30 rounded-xl">
+                <div className="text-sm text-muted-foreground mb-1">Claiming</div>
+                <div className="text-2xl font-bold gradient-text">{giftInfo.amount} USDC</div>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                  {error}
+                </div>
+              )}
+
+              <PrivyWalletClaim onBack={handleBack} onAddressReady={handleAddressReady} />
+            </>
+          )}
+
+          {/* Claiming in progress */}
+          {flowStatus === "claiming" && (
+            <div className="flex flex-col items-center space-y-4">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              <div className="text-center">
+                <h3 className="text-lg font-medium">Claiming your gift...</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Please wait while we process your claim
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Success state */}
-          {claimStatus === "success" && (
+          {flowStatus === "success" && (
             <div className="flex flex-col items-center space-y-6 text-center">
               <motion.div
                 initial={{ scale: 0 }}
@@ -300,13 +324,13 @@ export default function ClaimPage() {
               <div>
                 <h2 className="text-2xl font-bold">Claimed!</h2>
                 <p className="text-muted-foreground mt-1">
-                  {giftInfo?.amount} USDC has been sent to your wallet
+                  {giftInfo?.amount} USDC is now in your Hyperliquid account
                 </p>
               </div>
 
-              {txHash && (
+              {claimTxHash && (
                 <a
-                  href={`https://purrsec.com/tx/${txHash}`}
+                  href={`https://purrsec.com/tx/${claimTxHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-primary hover:underline"
@@ -316,7 +340,7 @@ export default function ClaimPage() {
               )}
 
               <Button
-                variant="outline"
+                variant="glow"
                 size="lg"
                 className="w-full"
                 onClick={() => window.open("https://app.hyperliquid.xyz", "_blank")}
