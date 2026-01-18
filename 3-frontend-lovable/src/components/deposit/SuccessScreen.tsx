@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
-import { Gift, Copy, Plus, CheckCircle2, Check } from "lucide-react";
+import { Gift, Copy, Plus, CheckCircle2, Check, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { QRCodeCanvas as QRCode } from "qrcode.react";
 
 interface SuccessScreenProps {
   amount: string;
@@ -13,6 +14,7 @@ interface SuccessScreenProps {
 
 export function SuccessScreen({ amount, claimId, claimSecret, onOpenHyperliquid, onCreateAnother }: SuccessScreenProps) {
   const [copied, setCopied] = useState(false);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   // Use hash fragment for secret (not sent to server/logs)
   const claimUrl = claimId && claimSecret
@@ -24,6 +26,17 @@ export function SuccessScreen({ amount, claimId, claimSecret, onOpenHyperliquid,
     await navigator.clipboard.writeText(claimUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownloadQR = () => {
+    if (!qrRef.current) return;
+    const canvas = qrRef.current.querySelector("canvas");
+    if (canvas) {
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `gift-${claimId}.png`;
+      link.click();
+    }
   };
 
   return (
@@ -73,7 +86,7 @@ export function SuccessScreen({ amount, claimId, claimSecret, onOpenHyperliquid,
             transition={{ delay: 0.4 }}
             className="text-muted-foreground"
           >
-            Share the link below to let them claim
+            Share the link or QR code below to let them claim
           </motion.p>
         </div>
 
@@ -88,6 +101,38 @@ export function SuccessScreen({ amount, claimId, claimSecret, onOpenHyperliquid,
           <div className="text-4xl font-bold gradient-text">{amount} USDC</div>
           <div className="text-sm text-muted-foreground mt-1">on Hyperliquid</div>
         </motion.div>
+
+        {/* QR Code */}
+        {claimUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.52 }}
+            className="w-full max-w-sm"
+          >
+            <div className="text-sm text-muted-foreground mb-3">QR Code</div>
+            <div
+              ref={qrRef}
+              className="flex justify-center p-4 bg-white rounded-lg glass-card"
+            >
+              <QRCode
+                value={claimUrl}
+                size={256}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-2"
+              onClick={handleDownloadQR}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download QR Code
+            </Button>
+          </motion.div>
+        )}
 
         {/* Claim link */}
         {claimUrl && (
