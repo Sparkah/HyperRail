@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index";
+import ClaimPage from "./pages/ClaimPage";
 import NotFound from "./pages/NotFound";
 
 // 1. Configure Wagmi and RainbowKit
@@ -42,6 +43,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
+              <Route path="/claim/:secret" element={<ClaimPage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
