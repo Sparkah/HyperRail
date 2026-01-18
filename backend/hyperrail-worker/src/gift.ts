@@ -75,6 +75,35 @@ const USDC_ADDRESSES: Record<number, Hex> = {
 	999: '0xb88339CB7199b77E23DB6E890353E22632Ba630f' as Hex, // Mainnet
 };
 
+// USDC system address for EVM → Core bridging (token index 0)
+const USDC_SYSTEM_ADDRESS = '0x2000000000000000000000000000000000000000' as Hex;
+
+// USDC token ID on HyperCore (for spotSend)
+const USDC_TOKEN_ID = '0x6d1e7cde53ba9467b783cb7c530ce054';
+
+// Hyperliquid API endpoints
+const HL_API_MAINNET = 'https://api.hyperliquid.xyz';
+const HL_API_TESTNET = 'https://api.hyperliquid-testnet.xyz';
+
+// EIP-712 domain for Hyperliquid signing
+const HL_SIGNING_DOMAIN = {
+	name: 'HyperliquidSignTransaction',
+	version: '1',
+	chainId: 42161, // Arbitrum chain ID (used for signing)
+	verifyingContract: '0x0000000000000000000000000000000000000000' as Hex,
+};
+
+// EIP-712 types for spotSend
+const SPOT_SEND_TYPES = {
+	'HyperliquidTransaction:SpotSend': [
+		{ name: 'hyperliquidChain', type: 'string' },
+		{ name: 'destination', type: 'string' },
+		{ name: 'token', type: 'string' },
+		{ name: 'amount', type: 'string' },
+		{ name: 'time', type: 'uint64' },
+	],
+} as const;
+
 // HyperRail contract ABI (v1 - no expiry)
 const HyperRailABI = [
 	{
@@ -270,6 +299,10 @@ export async function handleGetGift(claimId: string, env: GiftEnv, ctx: RequestC
 
 /**
  * Submit claim transaction via relayer.
+ * Flow:
+ * 1. Claim from gift contract to relayer's EVM address
+ * 2. Bridge USDC from EVM to Core (transfer to system address)
+ * 3. spotSend USDC from relayer to recipient on Core
  */
 export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestContext): Promise<Response> {
 	let body: ClaimRequest;
@@ -312,6 +345,10 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 	audit.claimStarted(ctx, walletAddress);
 
 	const chain = getChain(env.HYPEREVM_RPC);
+	const usdcAddress = USDC_ADDRESSES[chain.id];
+	const isMainnet = chain.id === 999;
+	const hlApiUrl = isMainnet ? HL_API_MAINNET : HL_API_TESTNET;
+	const hlChain = isMainnet ? 'Mainnet' : 'Testnet';
 
 	try {
 		// Create wallet client with relayer key
@@ -327,34 +364,137 @@ export async function handleClaim(request: Request, env: GiftEnv, ctx: RequestCo
 			transport: http(env.HYPEREVM_RPC),
 		});
 
-		// Submit claim transaction
-		const txHash = await walletClient.writeContract({
+		// Get gift amount from DB for the spotSend
+		const giftResult = await env.DB.prepare(`
+			SELECT amount FROM gifts WHERE claim_id = ?
+		`).bind(claimId).first();
+
+		if (!giftResult) {
+			audit.claimFailed(ctx, 'Gift not found in database');
+			return json({ error: 'Gift not found' }, 404);
+		}
+
+		const giftAmount = giftResult.amount as string;
+
+		// =========================================================================
+		// Step 1: Claim from gift contract to RELAYER's address (not recipient)
+		// =========================================================================
+		console.log(`[Claim] Step 1: Claiming gift to relayer address ${account.address}`);
+
+		const claimTxHash = await walletClient.writeContract({
 			address: env.GIFT_CONTRACT as Hex,
 			abi: HyperRailABI,
 			functionName: 'claim',
-			args: [claimSecret as Hex, walletAddress as Hex],
+			args: [claimSecret as Hex, account.address], // Claim to relayer, not recipient
 		});
 
-		audit.claimTxSubmitted(ctx, txHash, chain.name);
+		audit.claimTxSubmitted(ctx, claimTxHash, chain.name);
 
-		// Wait for transaction receipt
-		const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+		const claimReceipt = await publicClient.waitForTransactionReceipt({ hash: claimTxHash });
 
-		if (receipt.status === 'reverted') {
-			audit.claimFailed(ctx, 'Transaction reverted');
+		if (claimReceipt.status === 'reverted') {
+			audit.claimFailed(ctx, 'Claim transaction reverted');
 			return json({ error: 'Claim transaction reverted' }, 500);
 		}
 
+		console.log(`[Claim] Step 1 complete: ${claimTxHash}`);
+
+		// =========================================================================
+		// Step 2: Bridge USDC from EVM to Core (transfer to system address)
+		// =========================================================================
+		console.log(`[Claim] Step 2: Bridging ${giftAmount} USDC to Core`);
+
+		const amountWei = BigInt(Math.floor(parseFloat(giftAmount) * 1_000_000));
+
+		const bridgeTxHash = await walletClient.writeContract({
+			address: usdcAddress,
+			abi: erc20Abi,
+			functionName: 'transfer',
+			args: [USDC_SYSTEM_ADDRESS, amountWei],
+		});
+
+		const bridgeReceipt = await publicClient.waitForTransactionReceipt({ hash: bridgeTxHash });
+
+		if (bridgeReceipt.status === 'reverted') {
+			audit.claimFailed(ctx, 'Bridge transaction reverted');
+			return json({ error: 'Bridge to Core failed' }, 500);
+		}
+
+		console.log(`[Claim] Step 2 complete: ${bridgeTxHash}`);
+
+		// =========================================================================
+		// Step 3: spotSend USDC from relayer to recipient on Core
+		// =========================================================================
+		console.log(`[Claim] Step 3: Sending ${giftAmount} USDC to ${walletAddress} on Core`);
+
+		const timestamp = Date.now();
+		const token = `USDC:${USDC_TOKEN_ID}`;
+
+		// Sign the spotSend action using EIP-712
+		const signature = await account.signTypedData({
+			domain: HL_SIGNING_DOMAIN,
+			types: SPOT_SEND_TYPES,
+			primaryType: 'HyperliquidTransaction:SpotSend',
+			message: {
+				hyperliquidChain: hlChain,
+				destination: walletAddress,
+				token,
+				amount: giftAmount,
+				time: BigInt(timestamp),
+			},
+		});
+
+		// Parse signature into r, s, v
+		const r = signature.slice(0, 66) as Hex;
+		const s = `0x${signature.slice(66, 130)}` as Hex;
+		const v = parseInt(signature.slice(130, 132), 16);
+
+		// Send spotSend request to Hyperliquid API
+		const spotSendResponse = await fetch(`${hlApiUrl}/exchange`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				action: {
+					type: 'spotSend',
+					hyperliquidChain: hlChain,
+					signatureChainId: '0xa4b1', // Arbitrum chain ID in hex
+					destination: walletAddress,
+					token,
+					amount: giftAmount,
+					time: timestamp,
+				},
+				nonce: timestamp,
+				signature: { r, s, v },
+			}),
+		});
+
+		const spotSendResult = await spotSendResponse.json() as any;
+
+		if (!spotSendResponse.ok || spotSendResult.status === 'err') {
+			console.error('[Claim] spotSend failed:', spotSendResult);
+			audit.claimFailed(ctx, `spotSend failed: ${JSON.stringify(spotSendResult)}`);
+			return json({ error: 'Core transfer failed', details: spotSendResult }, 500);
+		}
+
+		console.log(`[Claim] Step 3 complete:`, spotSendResult);
+
+		// =========================================================================
 		// Update DB with claimed status
+		// =========================================================================
 		await env.DB.prepare(`
 			UPDATE gifts
 			SET status = 'claimed', claim_tx_hash = ?, recipient_address = ?, claimed_at = CURRENT_TIMESTAMP
 			WHERE claim_id = ?
-		`).bind(txHash, walletAddress, claimId).run();
+		`).bind(claimTxHash, walletAddress, claimId).run();
 
-		audit.claimSuccess(ctx, txHash, walletAddress);
+		audit.claimSuccess(ctx, claimTxHash, walletAddress);
 
-		return json({ success: true, txHash, status: 'claimed' });
+		return json({
+			success: true,
+			claimTxHash,
+			bridgeTxHash,
+			status: 'claimed',
+		});
 	} catch (error: any) {
 		// Parse common errors
 		if (error.message?.includes('not found') || error.message?.includes('gift not found')) {
