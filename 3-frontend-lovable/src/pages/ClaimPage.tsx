@@ -341,39 +341,35 @@ export default function ClaimPage() {
 
               <div className="w-full space-y-2">
                 <p className="text-sm text-muted-foreground text-center">What would you like to do?</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className="p-4 rounded-xl border border-border bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
                     onClick={() => window.open("https://app.hyperliquid.xyz", "_blank")}
                   >
-                    <span className="font-medium">Hyperliquid</span>
-                    <span className="text-xs text-muted-foreground text-center leading-snug">You decide what to buy and sell</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    <div className="font-medium mb-1">Hyperliquid</div>
+                    <div className="text-xs text-muted-foreground">You decide what to buy and sell</div>
+                  </button>
+                  <button
+                    className="p-4 rounded-xl border border-border bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
                     onClick={() => window.open("https://trysuper.co", "_blank")}
                   >
-                    <span className="font-medium">Super</span>
-                    <span className="text-xs text-muted-foreground text-center leading-snug">Experts trade for you automatically</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    <div className="font-medium mb-1">Super</div>
+                    <div className="text-xs text-muted-foreground">Experts trade for you automatically</div>
+                  </button>
+                  <button
+                    className="p-4 rounded-xl border border-border bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
                     onClick={() => window.open("https://app.valantis.xyz", "_blank")}
                   >
-                    <span className="font-medium">Valantis</span>
-                    <span className="text-xs text-muted-foreground text-center leading-snug">Your money grows while you wait</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    <div className="font-medium mb-1">Valantis</div>
+                    <div className="text-xs text-muted-foreground">Your money grows while you wait</div>
+                  </button>
+                  <button
+                    className="p-4 rounded-xl border border-border bg-secondary/20 hover:bg-secondary/40 transition-colors text-left"
                     onClick={() => window.open("https://pear.garden", "_blank")}
                   >
-                    <span className="font-medium">Pear Protocol</span>
-                    <span className="text-xs text-muted-foreground text-center leading-snug">Focus on asset relationships, not market trends</span>
-                  </Button>
+                    <div className="font-medium mb-1">Pear Protocol</div>
+                    <div className="text-xs text-muted-foreground">Focus on asset relationships, not market trends</div>
+                  </button>
                 </div>
               </div>
             </div>
