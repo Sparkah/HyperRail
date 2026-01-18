@@ -7,8 +7,8 @@ enabled = true
 
 [vars]
 LIFI_INTEGRATOR = "HyperRail"
-HYPEREVM_RPC = "https://rpc.hyperliquid-testnet.xyz/evm"
-GIFT_CONTRACT = ""
+HYPEREVM_RPC = "https://rpc.hyperliquid.xyz/evm"
+GIFT_CONTRACT = "0x32e22a4EE21e6D923aa7FbfBDd488F7E3D1E398a"
 
 [[d1_databases]]
 binding = "DB"
