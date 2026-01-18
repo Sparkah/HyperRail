@@ -105,7 +105,7 @@ export function useTokenApproval({
         address: tokenAddress,
         abi: erc20Abi,
         functionName: "approve",
-        args: [spenderAddress, amount], // Exact amount, not maxUint256
+        args: [spenderAddress, maxUint256], // Infinite approval - one time per token
         chainId,
       });
 
