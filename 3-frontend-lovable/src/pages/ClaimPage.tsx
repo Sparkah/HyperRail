@@ -300,7 +300,7 @@ export default function ClaimPage() {
               <div>
                 <h2 className="text-2xl font-bold">Claimed!</h2>
                 <p className="text-muted-foreground mt-1">
-                  {giftInfo?.amount} USDC is on the way to your wallet
+                  {giftInfo?.amount} USDC has been sent to your wallet
                 </p>
               </div>
 
