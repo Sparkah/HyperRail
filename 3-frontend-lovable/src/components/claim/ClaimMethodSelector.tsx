@@ -34,7 +34,7 @@ export function ClaimMethodSelector({ onSelect }: ClaimMethodSelectorProps) {
         <div className="flex-1">
           <div className="font-medium">I have a Hyperliquid wallet</div>
           <div className="text-sm text-muted-foreground mt-0.5">
-            Connect your existing wallet to claim
+            Enter your wallet address
           </div>
         </div>
       </Button>
@@ -49,9 +49,9 @@ export function ClaimMethodSelector({ onSelect }: ClaimMethodSelectorProps) {
           <UserPlus className="w-5 h-5 text-primary" />
         </div>
         <div className="flex-1">
-          <div className="font-medium">Create a Hyperliquid wallet</div>
+          <div className="font-medium">I need a wallet</div>
           <div className="text-sm text-muted-foreground mt-0.5">
-            Sign up with email or social login
+            We'll create one for you
           </div>
         </div>
       </Button>

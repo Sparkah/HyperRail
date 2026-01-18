@@ -36,8 +36,8 @@ export function EntryScreen({
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold">Bridge to <span className="gradient-text">HyperRail</span></h1>
-        <p className="text-muted-foreground">Select your source route and amount.</p>
+        <h1 className="text-3xl font-bold">Send a <span className="gradient-text">Gift</span></h1>
+        <p className="text-muted-foreground">Choose your token and amount</p>
       </div>
 
       <div className="glass-card p-6 space-y-4">
@@ -83,7 +83,7 @@ export function EntryScreen({
       </div>
 
       <Button variant="glow" size="lg" className="w-full h-14 text-lg font-semibold" disabled={!isValid || isLoading} onClick={onContinue}>
-        {isLoading ? "Finding best route..." : "Preview Route"} {!isLoading && <ArrowRight className="h-5 w-5 ml-2" />}
+        {isLoading ? "Loading..." : "Bridge"} {!isLoading && <ArrowRight className="h-5 w-5 ml-2" />}
       </Button>
     </motion.div>
   );

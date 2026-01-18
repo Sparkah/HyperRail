@@ -51,7 +51,7 @@ export function GeneratedWalletClaim({ onBack, onAddressReady }: GeneratedWallet
       </button>
 
       <div className="text-center mb-4">
-        <h3 className="text-lg font-medium">Your New Wallet</h3>
+        <h3 className="text-lg font-medium">Your Wallet</h3>
         <p className="text-sm text-muted-foreground mt-1">
           Save your recovery phrase to access your funds
         </p>

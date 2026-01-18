@@ -210,7 +210,7 @@ export default function ClaimPage() {
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Waiting for bridge to complete...
+                Preparing your gift...
               </div>
               <p className="text-xs text-muted-foreground">
                 This page will update automatically
@@ -322,7 +322,7 @@ export default function ClaimPage() {
               </motion.div>
 
               <div>
-                <h2 className="text-2xl font-bold">Claimed!</h2>
+                <h2 className="text-2xl font-bold">Welcome to the free markets</h2>
                 <p className="text-muted-foreground mt-1">
                   {giftInfo?.amount} USDC is now in your Hyperliquid account
                 </p>
@@ -339,14 +339,43 @@ export default function ClaimPage() {
                 </a>
               )}
 
-              <Button
-                variant="glow"
-                size="lg"
-                className="w-full"
-                onClick={() => window.open("https://app.hyperliquid.xyz", "_blank")}
-              >
-                Open Hyperliquid
-              </Button>
+              <div className="w-full space-y-2">
+                <p className="text-sm text-muted-foreground text-center">What would you like to do?</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    onClick={() => window.open("https://app.hyperliquid.xyz", "_blank")}
+                  >
+                    <span className="font-medium">Hyperliquid</span>
+                    <span className="text-xs text-muted-foreground text-center leading-snug">You decide what to buy and sell</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    onClick={() => window.open("https://trysuper.co", "_blank")}
+                  >
+                    <span className="font-medium">Super</span>
+                    <span className="text-xs text-muted-foreground text-center leading-snug">Experts trade for you automatically</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    onClick={() => window.open("https://app.valantis.xyz", "_blank")}
+                  >
+                    <span className="font-medium">Valantis</span>
+                    <span className="text-xs text-muted-foreground text-center leading-snug">Your money grows while you wait</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-auto py-4 px-3 flex flex-col items-center gap-1"
+                    onClick={() => window.open("https://pear.garden", "_blank")}
+                  >
+                    <span className="font-medium">Pear Protocol</span>
+                    <span className="text-xs text-muted-foreground text-center leading-snug">Focus on asset relationships, not market trends</span>
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </motion.div>
