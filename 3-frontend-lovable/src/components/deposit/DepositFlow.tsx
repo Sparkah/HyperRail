@@ -26,13 +26,14 @@ export function DepositFlow() {
 
   const [step, setStep] = useState<DepositStep>("entry");
   const [amount, setAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isQuoting, setIsQuoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [sourceChain, setSourceChain] = useState<Chain | null>(null);
   const [sourceToken, setSourceToken] = useState<Token | null>(null);
 
   const [route, setRoute] = useState<RouteInfo | null>(null);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   // Gift flow state
   const [relayerAddress, setRelayerAddress] = useState<string | null>(null);
@@ -65,8 +66,8 @@ export function DepositFlow() {
 
   const walletBalance = balanceData ? parseFloat(balanceData.formatted) : 0;
 
-  // Calculate raw amount for approval (assumes 6 decimals for USDC/USDT, 18 for ETH)
-  const tokenDecimals = sourceToken?.symbol === "ETH" ? 18 : 6;
+  // Get token decimals from config
+  const tokenDecimals = sourceToken ? TOKENS[sourceToken.symbol as keyof typeof TOKENS]?.decimals ?? 18 : 18;
   const rawAmount = useMemo(() => {
     if (!amount || isNaN(parseFloat(amount))) return 0n;
     try {
@@ -96,7 +97,7 @@ export function DepositFlow() {
   });
 
   // Poll gift status (handles bridge check + gift creation)
-  const { steps: liveSteps, status: giftStatus } = useGiftStatus({
+  const { steps: liveSteps } = useGiftStatus({
     claimId: giftClaimId,
     enabled: step === "progress" && !!giftClaimId,
     onComplete: () => setStep("success"),
@@ -112,7 +113,7 @@ export function DepositFlow() {
       return;
     }
 
-    setIsLoading(true);
+    setIsQuoting(true);
     setError(null);
     try {
       const decimals = TOKENS[sourceToken.symbol as keyof typeof TOKENS]?.decimals ?? 18;
@@ -171,10 +172,10 @@ export function DepositFlow() {
 
       setStep("preview");
     } catch (err: any) {
-      console.error(err);
-      setError("No valid route found. Try a different source chain.");
+      console.error("Quote failed:", err);
+      setError(err.message || "No valid route found. Try a different amount or chain.");
     } finally {
-      setIsLoading(false);
+      setIsQuoting(false);
     }
   };
 
@@ -206,6 +207,7 @@ export function DepositFlow() {
     }
 
     // Step 2: Execute swap transaction
+    setIsSwapping(true);
     try {
       const tx = await sendTransactionAsync({
         to: route.transactionRequest.to as `0x${string}`,
@@ -240,6 +242,7 @@ export function DepositFlow() {
     } catch (err: any) {
       console.error("Swap/Gift failed:", err);
       setError(err.shortMessage || err.message || "Transaction rejected.");
+      setIsSwapping(false);
     }
   };
 
@@ -250,6 +253,9 @@ export function DepositFlow() {
     }
     if (approvalState === "approving") {
       return { text: `Approving ${sourceToken?.symbol}...`, disabled: true, loading: true };
+    }
+    if (isSwapping) {
+      return { text: "Sending transaction...", disabled: true, loading: true };
     }
     if (needsApproval) {
       return { text: `Approve ${sourceToken?.symbol}`, disabled: false, loading: false };
@@ -278,6 +284,7 @@ export function DepositFlow() {
               amount={amount}
               balance={isConnected ? balanceData?.formatted || null : null}
               error={error}
+              isLoading={isQuoting}
               onSourceChainSelect={setSourceChain}
               onSourceTokenSelect={setSourceToken}
               onAmountChange={setAmount}
@@ -318,6 +325,7 @@ export function DepositFlow() {
                 setError(null);
                 setGiftClaimId(null);
                 setGiftClaimSecret(null);
+                setIsSwapping(false);
               }}
             />
           )}

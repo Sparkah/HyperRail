@@ -12,6 +12,7 @@ interface EntryScreenProps {
   amount: string;
   balance: string | null;
   error: string | null;
+  isLoading?: boolean;
   onSourceChainSelect: (chain: Chain) => void;
   onSourceTokenSelect: (token: Token) => void;
   onAmountChange: (amount: string) => void;
@@ -24,6 +25,7 @@ export function EntryScreen({
   amount,
   balance,
   error,
+  isLoading = false,
   onSourceChainSelect,
   onSourceTokenSelect,
   onAmountChange,
@@ -80,8 +82,8 @@ export function EntryScreen({
         </div>
       </div>
 
-      <Button variant="glow" size="lg" className="w-full h-14 text-lg font-semibold" disabled={!isValid} onClick={onContinue}>
-        Preview Route <ArrowRight className="h-5 w-5 ml-2" />
+      <Button variant="glow" size="lg" className="w-full h-14 text-lg font-semibold" disabled={!isValid || isLoading} onClick={onContinue}>
+        {isLoading ? "Finding best route..." : "Preview Route"} {!isLoading && <ArrowRight className="h-5 w-5 ml-2" />}
       </Button>
     </motion.div>
   );
